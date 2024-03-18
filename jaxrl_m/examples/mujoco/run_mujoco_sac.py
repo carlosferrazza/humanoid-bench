@@ -33,17 +33,8 @@ flags.DEFINE_integer('render_interval', 250000, 'Render interval.')
 flags.DEFINE_integer('batch_size', 64, 'Mini batch size.')
 flags.DEFINE_integer('max_steps', int(1e6), 'Number of training steps.')
 flags.DEFINE_integer('start_steps', int(1e4), 'Number of initial exploration steps.')
-flags.DEFINE_integer('wandb_entity', 'robot-learning', 'Wandb entity.')
+flags.DEFINE_string('wandb_entity', 'robot-learning', 'Wandb entity.')
 
-wandb_config = default_wandb_config()
-wandb_config.update({
-    'entity': FLAGS.entity,
-    'project': 'humanoid-bench',
-    'name': 'sac_{env_name}',
-})
-
-config_flags.DEFINE_config_dict('wandb', wandb_config, lock_config=False)
-config_flags.DEFINE_config_dict('config', learner.get_default_config(), lock_config=False)
 
 def render(policy_fn, env) -> np.ndarray:
     frames = []
@@ -68,6 +59,15 @@ def render(policy_fn, env) -> np.ndarray:
     return frames, episode_return, episode_length
 
 def main(_):
+    wandb_config = default_wandb_config()
+    wandb_config.update({
+            'entity': FLAGS.wandb_entity,
+                'project': 'humanoid-bench',
+                    'name': 'sac_{env_name}',
+                    })
+
+    config_flags.DEFINE_config_dict('wandb', wandb_config, lock_config=False)
+    config_flags.DEFINE_config_dict('config', learner.get_default_config(), lock_config=False)
 
     # Create wandb logger
     setup_wandb(FLAGS.config.to_dict(), **FLAGS.wandb)

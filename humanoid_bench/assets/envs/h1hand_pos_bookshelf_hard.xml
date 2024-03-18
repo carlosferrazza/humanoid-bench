@@ -1,0 +1,28 @@
+<mujoco model="h1hand_pos_bookshelf_hard">
+    <option timestep="0.002" iterations="100" ls_iterations="50" solver="Newton">
+        <flag eulerdamp="enable"/>
+    </option>
+    <include file="../common/visual.xml"/>
+    <include file="../common/floor.xml"/>
+    <include file="../robots/h1hand_pos.xml"/>
+    <include file="../tasks/bookshelf_hard.xml"/>
+    <keyframe>
+        <key name="qpos0" qpos="
+            0 0 0.98 1 0 0 0 0 0 -0.4 0.8 -0.4 0 0 -0.4 0.8 -0.4 0 0 0 0 0 0 0 0 0
+            0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+            0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+            0.95 -0.36 1.25 0 0 0 0
+            0.95 -0.3 1.25 0 0 0 0
+            0.95 -0.24 1.25 0 0 0 0
+            0.95 -0.18 1.25 0 0 0 0
+            0.95 -0.12 1.25 0 0 0 0
+            0.95 0.02 1.25 0 0 0 0
+            0.95 0.12 1.255 0.7073883 -0.7068252 0 0
+            0.95 -0.3 0.65 0 0 0 0
+            0.95 -0.13 0.65 0 0 0 0
+            0.95 0 0.65 0 0 0 0
+            0.95 0.2 0.65 0 0 0 0
+            0.85 0 1.58 0.8689313 -0.06692531 0.12250874 0.47483787
+        "/>
+    </keyframe>
+</mujoco>

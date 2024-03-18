@@ -1,0 +1,6 @@
+<mujoco model="right-toe-A-0_collision">
+<geom class="collision" type="mesh" mesh="right-toe-A-0_part_0" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'   />
+<geom class="collision" type="mesh" mesh="right-toe-A-0_part_1" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'   />
+<geom class="collision" type="mesh" mesh="right-toe-A-0_part_2" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'   />
+<geom class="collision" type="mesh" mesh="right-toe-A-0_part_3" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'   />
+</mujoco>

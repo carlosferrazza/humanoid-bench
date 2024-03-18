@@ -1,0 +1,8 @@
+<mujoco model="base-4_collision_assets">
+<mesh  file="base-4_split/base-4_part_0.obj" scale="1 -1 1" name="base-4_part_0"/>
+<mesh  file="base-4_split/base-4_part_1.obj" scale="1 -1 1" name="base-4_part_1"/>
+<mesh  file="base-4_split/base-4_part_2.obj" scale="1 -1 1" name="base-4_part_2"/>
+<mesh  file="base-4_split/base-4_part_3.obj" scale="1 -1 1" name="base-4_part_3"/>
+<mesh  file="base-4_split/base-4_part_4.obj" scale="1 -1 1" name="base-4_part_4"/>
+<mesh  file="base-4_split/base-4_part_5.obj" scale="1 -1 1" name="base-4_part_5"/>
+</mujoco>

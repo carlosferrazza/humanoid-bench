@@ -1,0 +1,6 @@
+Mon Mar 18 00:31:51 2024
+WARNING: mju_openResource: unknown file 'h1gripper_pos.xml'
+
+Mon Mar 18 00:39:04 2024
+WARNING: mju_openResource: unknown file 'h1hand_pos-01292024'
+

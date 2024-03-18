@@ -1,0 +1,9 @@
+<mujoco model="h1touch_pos_insert_normal">
+    <option timestep="0.002" iterations="100" ls_iterations="50" solver="Newton">
+        <flag eulerdamp="enable"/>
+    </option>
+    <include file="../common/visual.xml"/>
+    <include file="../common/floor.xml"/>
+    <include file="../robots/h1touch_pos.xml"/>
+    <include file="../tasks/insert_normal.xml"/>
+</mujoco>

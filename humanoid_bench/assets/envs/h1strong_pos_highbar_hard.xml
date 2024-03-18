@@ -1,0 +1,46 @@
+<mujoco model="h1strong_pos_highbar_hard">
+    <option timestep="0.002" iterations="100" ls_iterations="50" solver="Newton">
+        <flag eulerdamp="enable"/>
+    </option>
+    <include file="../common/visual.xml"/>
+    <include file="../common/floor.xml"/>
+    <include file="../robots/h1strong_pos.xml"/>
+    <include file="../tasks/highbar_hard.xml"/>
+    <keyframe>
+        <key qpos='0.27 0. 1.62 1 0 0 0
+            0 0 0 0 0
+            0 0 0 0 0
+            0
+            0 3.11 0 1.6 0
+            0.11 0.33
+            0 1.3 0.7 1.7
+            0 1.3 0.7 1.7
+            0 1.3 0.7 1.7
+            0.1 0 1.2 0.77 1.62
+            0.31 1.35 0.27 0.27 1.45
+            0 -3.11 0 1.6 0
+            0.11 0.33
+            0 1.3 0.7 1.7
+            0 1.3 0.7 1.7
+            0 1.3 0.7 1.7
+            0.1 0 1.2 0.77 1.62
+            0.31 1.35 0.27 0.27 1.45'
+            ctrl='0 0 0 0 0
+            0 0 0 0 0
+            0
+            0 3.11 0 1.6 0
+            0 -3.11 0 1.6 0
+            0.11 0.33
+            1.05 1.22 0.209 0.698 1.57
+            0 1.57 2.5
+            0 1.57 2.5
+            0 1.57 2.5
+            0.785 0 1.57 2.5
+            0.11 0.33
+            1.05 1.22 0.209 0.698 1.57
+            0 1.57 2.5
+            0 1.57 2.5
+            0 1.57 2.5
+            0.785 0 1.57 2.5'/>
+    </keyframe>
+</mujoco>

@@ -1,0 +1,13 @@
+<mujocoinclude>
+    <worldbody>
+        <body name="tunnel" pos="2.2 0 0">
+            <geom type="box" name="left_wall" pos="8 -1.35 0.775" size="8 0.2 0.775" rgba="0.5 0.5 0.5 0.3" class="visual"/>
+            <geom type="box" name="right_wall" pos="8 1.35 0.775" size="8 0.2 0.775" rgba="0.5 0.5 0.5 0.3" class="visual"/>
+            <geom type="box" name="ceiling" pos="8 0 1.35" size="8 1.15 0.2" rgba="0.5 0.5 0.5 0.3" class="visual"/>
+
+            <geom type="box" pos="8 -1.35 0.775" size="8 0.2 0.775" class="collision"/>
+            <geom type="box" pos="8 1.35 0.775" size="8 0.2 0.775" class="collision"/>
+            <geom type="box" pos="8 0 1.35" size="8 1.15 0.2" class="collision"/>
+        </body>
+    </worldbody>
+</mujocoinclude>

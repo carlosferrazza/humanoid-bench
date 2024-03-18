@@ -1,0 +1,6 @@
+<mujoco model="right-toe-B-0_collision_assets">
+<mesh  file="right-toe-B-0_split/right-toe-B-0_part_0.obj" scale="1 -1 1" name="right-toe-B-0_part_0"/>
+<mesh  file="right-toe-B-0_split/right-toe-B-0_part_1.obj" scale="1 -1 1" name="right-toe-B-0_part_1"/>
+<mesh  file="right-toe-B-0_split/right-toe-B-0_part_2.obj" scale="1 -1 1" name="right-toe-B-0_part_2"/>
+<mesh  file="right-toe-B-0_split/right-toe-B-0_part_3.obj" scale="1 -1 1" name="right-toe-B-0_part_3"/>
+</mujoco>

@@ -1,0 +1,144 @@
+<mujoco model="touch_sensors_body">
+
+    <sensor>
+        <plugin name="base_touch" plugin="mujoco.sensor.touch_grid" objtype="site" objname="base_touch">
+            <config key="nchannel" value="3"/>
+            <config key="size" value="4 2"/>
+            <config key="fov" value="180 90"/>
+            <config key="gamma" value="0"/>
+        </plugin>
+        <plugin name="left-hip-roll_touch" plugin="mujoco.sensor.touch_grid" objtype="site" objname="left-hip-roll_touch">
+            <config key="nchannel" value="3"/>
+            <config key="size" value="4 2"/>
+            <config key="fov" value="180 90"/>
+            <config key="gamma" value="0"/>
+        </plugin>
+        <plugin name="left-hip-yaw_touch" plugin="mujoco.sensor.touch_grid" objtype="site" objname="left-hip-yaw_touch">
+            <config key="nchannel" value="3"/>
+            <config key="size" value="4 2"/>
+            <config key="fov" value="180 90"/>
+            <config key="gamma" value="0"/>
+        </plugin>
+        <plugin name="left-hip-pitch_touch" plugin="mujoco.sensor.touch_grid" objtype="site" objname="left-hip-pitch_touch">
+            <config key="nchannel" value="3"/>
+            <config key="size" value="4 2"/>
+            <config key="fov" value="180 90"/>
+            <config key="gamma" value="0"/>
+        </plugin>
+        <plugin name="left-shin_touch" plugin="mujoco.sensor.touch_grid" objtype="site" objname="left-shin_touch">
+            <config key="nchannel" value="3"/>
+            <config key="size" value="4 2"/>
+            <config key="fov" value="180 90"/>
+            <config key="gamma" value="0"/>
+        </plugin>
+        <plugin name="left-tarsus_touch" plugin="mujoco.sensor.touch_grid" objtype="site" objname="left-tarsus_touch">
+            <config key="nchannel" value="3"/>
+            <config key="size" value="4 2"/>
+            <config key="fov" value="180 90"/>
+            <config key="gamma" value="0"/>
+        </plugin>
+        <plugin name="left-toe-A_touch" plugin="mujoco.sensor.touch_grid" objtype="site" objname="left-toe-A_touch">
+            <config key="nchannel" value="3"/>
+            <config key="size" value="4 2"/>
+            <config key="fov" value="180 90"/>
+            <config key="gamma" value="0"/>
+        </plugin>
+        <plugin name="left-foot_touch" plugin="mujoco.sensor.touch_grid" objtype="site" objname="left-foot_touch">
+            <config key="nchannel" value="3"/>
+            <config key="size" value="4 2"/>
+            <config key="fov" value="180 90"/>
+            <config key="gamma" value="0"/>
+        </plugin>
+        <plugin name="left-shoulder-roll_touch" plugin="mujoco.sensor.touch_grid" objtype="site" objname="left-shoulder-roll_touch">
+            <config key="nchannel" value="3"/>
+            <config key="size" value="4 2"/>
+            <config key="fov" value="180 90"/>
+            <config key="gamma" value="0"/>
+        </plugin>
+        <plugin name="left-shoulder-pitch_touch" plugin="mujoco.sensor.touch_grid" objtype="site" objname="left-shoulder-pitch_touch">
+            <config key="nchannel" value="3"/>
+            <config key="size" value="4 2"/>
+            <config key="fov" value="180 90"/>
+            <config key="gamma" value="0"/>
+        </plugin>
+        <plugin name="left-shoulder-yaw_touch" plugin="mujoco.sensor.touch_grid" objtype="site" objname="left-shoulder-yaw_touch">
+            <config key="nchannel" value="3"/>
+            <config key="size" value="4 2"/>
+            <config key="fov" value="180 90"/>
+            <config key="gamma" value="0"/>
+        </plugin>
+        <plugin name="left-elbow_touch" plugin="mujoco.sensor.touch_grid" objtype="site" objname="left-elbow_touch">
+            <config key="nchannel" value="3"/>
+            <config key="size" value="4 2"/>
+            <config key="fov" value="180 90"/>
+            <config key="gamma" value="0"/>
+        </plugin>
+        <plugin name="right-hip-roll_touch" plugin="mujoco.sensor.touch_grid" objtype="site" objname="right-hip-roll_touch">
+            <config key="nchannel" value="3"/>
+            <config key="size" value="4 2"/>
+            <config key="fov" value="180 90"/>
+            <config key="gamma" value="0"/>
+        </plugin>
+        <plugin name="right-hip-yaw_touch" plugin="mujoco.sensor.touch_grid" objtype="site" objname="right-hip-yaw_touch">
+            <config key="nchannel" value="3"/>
+            <config key="size" value="4 2"/>
+            <config key="fov" value="180 90"/>
+            <config key="gamma" value="0"/>
+        </plugin>
+        <plugin name="right-hip-pitch_touch" plugin="mujoco.sensor.touch_grid" objtype="site" objname="right-hip-pitch_touch">
+            <config key="nchannel" value="3"/>
+            <config key="size" value="4 2"/>
+            <config key="fov" value="180 90"/>
+            <config key="gamma" value="0"/>
+        </plugin>
+        <plugin name="right-shin_touch" plugin="mujoco.sensor.touch_grid" objtype="site" objname="right-shin_touch">
+            <config key="nchannel" value="3"/>
+            <config key="size" value="4 2"/>
+            <config key="fov" value="180 90"/>
+            <config key="gamma" value="0"/>
+        </plugin>
+        <plugin name="right-tarsus_touch" plugin="mujoco.sensor.touch_grid" objtype="site" objname="right-tarsus_touch">
+            <config key="nchannel" value="3"/>
+            <config key="size" value="4 2"/>
+            <config key="fov" value="180 90"/>
+            <config key="gamma" value="0"/>
+        </plugin>
+        <plugin name="right-toe-A_touch" plugin="mujoco.sensor.touch_grid" objtype="site" objname="right-toe-A_touch">
+            <config key="nchannel" value="3"/>
+            <config key="size" value="4 2"/>
+            <config key="fov" value="180 90"/>
+            <config key="gamma" value="0"/>
+        </plugin>
+        <plugin name="right-foot_touch" plugin="mujoco.sensor.touch_grid" objtype="site" objname="right-foot_touch">
+            <config key="nchannel" value="3"/>
+            <config key="size" value="4 2"/>
+            <config key="fov" value="180 90"/>
+            <config key="gamma" value="0"/>
+        </plugin>
+        <plugin name="right-shoulder-roll_touch" plugin="mujoco.sensor.touch_grid" objtype="site" objname="right-shoulder-roll_touch">
+            <config key="nchannel" value="3"/>
+            <config key="size" value="4 2"/>
+            <config key="fov" value="180 90"/>
+            <config key="gamma" value="0"/>
+        </plugin>
+        <plugin name="right-shoulder-pitch_touch" plugin="mujoco.sensor.touch_grid" objtype="site" objname="right-shoulder-pitch_touch">
+            <config key="nchannel" value="3"/>
+            <config key="size" value="4 2"/>
+            <config key="fov" value="180 90"/>
+            <config key="gamma" value="0"/>
+        </plugin>
+        <plugin name="right-shoulder-yaw_touch" plugin="mujoco.sensor.touch_grid" objtype="site" objname="right-shoulder-yaw_touch">
+            <config key="nchannel" value="3"/>
+            <config key="size" value="4 2"/>
+            <config key="fov" value="180 90"/>
+            <config key="gamma" value="0"/>
+        </plugin>
+        <plugin name="right-elbow_touch" plugin="mujoco.sensor.touch_grid" objtype="site" objname="right-elbow_touch">
+            <config key="nchannel" value="3"/>
+            <config key="size" value="4 2"/>
+            <config key="fov" value="180 90"/>
+            <config key="gamma" value="0"/>
+        </plugin>
+    </sensor>
+
+</mujoco>

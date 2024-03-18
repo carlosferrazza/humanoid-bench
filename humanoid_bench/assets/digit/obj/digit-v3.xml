@@ -1,0 +1,371 @@
+<mujoco model='digit-v3'>
+  <compiler angle='degree' eulerseq='xyz'/>
+  <option gravity='0 0 -9.806' iterations='50' solver='Newton' timestep='0.000500'/>
+  <asset>
+    <material name='collision' rgba='0.1 0.5 0.9 0.4'/>
+    <material name='plane' reflectance='0.000000' texrepeat='1 1' texture='plane' texuniform='true'/>
+    <material name='robot' rgba='0.9 0.5 0.1 1'/>
+    <texture builtin='checker' height='512' name='plane' rgb1='0.2 0.2 0.2' rgb2='0.3 0.3 0.3' type='2d' width='512'/>
+    <texture builtin='gradient' height='128' rgb1='0.4 0.6 0.8' rgb2='0 0 0' type='skybox' width='128'/>
+    <mesh name='base' file='torso.obj'/>
+    <mesh name='left-hip-roll' file='hip-yaw-housing.obj'/>
+    <mesh name='left-hip-yaw' file='hip-pitch-housing.obj'/>
+    <mesh name='left-hip-pitch' file='hip-pitch.obj'/>
+    <mesh name='left-knee' file='knee.obj'/>
+    <mesh name='left-shin' file='shin.obj'/>
+    <mesh name='left-tarsus' file='tarsus.obj'/>
+    <mesh name='left-toe-A' file='toe-output.obj'/>
+    <mesh name='left-toe-A-rod' file='toe-A-rod.obj'/>
+    <mesh name='left-toe-B' file='toe-output.obj'/>
+    <mesh name='left-toe-B-rod' file='toe-B-rod.obj'/>
+    <mesh name='left-toe-pitch' file='toe-pitch.obj'/>
+    <mesh name='left-toe-roll' file='toe-roll.obj'/>
+    <mesh name='left-heel-spring' file='heel-spring.obj'/>
+    <mesh name='left-achillies-rod' file='achilles-rod.obj'/>
+    <mesh name='right-hip-roll' scale='1 -1 1' file='hip-yaw-housing.obj'/>
+    <mesh name='right-hip-yaw' scale='1 -1 1' file='hip-pitch-housing.obj'/>
+    <mesh name='right-hip-pitch' scale='1 -1 1' file='hip-pitch.obj'/>
+    <mesh name='right-knee' scale='1 -1 1' file='knee.obj'/>
+    <mesh name='right-shin' scale='1 -1 1' file='shin.obj'/>
+    <mesh name='right-tarsus' scale='1 -1 1' file='tarsus.obj'/>
+    <mesh name='right-toe-A' scale='1 -1 1' file='toe-output.obj'/>
+    <mesh name='right-toe-A-rod' scale='1 -1 1' file='toe-A-rod.obj'/>
+    <mesh name='right-toe-B' scale='1 -1 1' file='toe-output.obj'/>
+    <mesh name='right-toe-B-rod' scale='1 -1 1' file='toe-B-rod.obj'/>
+    <mesh name='right-toe-pitch' scale='1 -1 1' file='toe-pitch.obj'/>
+    <mesh name='right-toe-roll' scale='1 -1 1' file='toe-roll.obj'/>
+    <mesh name='right-heel-spring' scale='1 -1 1' file='heel-spring.obj'/>
+    <mesh name='right-achillies-rod' scale='1 -1 1' file='achilles-rod.obj'/>
+    <mesh name='left-shoulder-roll' file='arm-L1.obj'/>
+    <mesh name='left-shoulder-pitch' file='arm-L2.obj'/>
+    <mesh name='left-shoulder-yaw' file='arm-L3.obj'/>
+    <mesh name='left-elbow' file='arm-L4.obj'/>
+    <mesh name='right-shoulder-roll' scale='1 -1 1' file='arm-L1.obj'/>
+    <mesh name='right-shoulder-pitch' scale='1 -1 1' file='arm-L2.obj'/>
+    <mesh name='right-shoulder-yaw' scale='1 -1 1' file='arm-L3.obj'/>
+    <mesh name='right-elbow' scale='1 -1 1' file='arm-L4.obj'/>
+  </asset>
+  <default>
+    <default class='collision'>
+      <geom conaffinity='1' condim='3' contype='1' material='collision'/>
+    </default>
+    <default class='robot'>
+      <geom material='robot'/>
+    </default>
+    <equality solref='0.005 1'/>
+    <geom conaffinity='0' condim='1' contype='0' solref='0.005 1'/>
+    <motor ctrllimited='true'/>
+  </default>
+  <worldbody>
+    <geom name='floor' type='plane' conaffinity='15' condim='3' material='plane' pos='0 0 0' size='5 5 0.125'/>
+    <body name='base' pos='0 0 1.03' euler='0 0 0'>
+      <inertial pos='0.001637 0.0002 0.259547' mass='15.028392' fullinertia='0.376284 0.342655 0.100648 -8.8e-05 0.008378 6.7e-05'/>
+      <joint type='free' limited='false'/>
+      <geom type='mesh' mesh='base' material='robot'/>
+      <geom type='box' size='0.0975 0.087 0.245' pos='0.008 0 0.21' euler='0 0 0' class='collision'/>
+      <geom type='cylinder' size ='0.05 0.0325' pos='0.02 0 0.49' euler='0 0 0' class='collision'/>
+      <site name='context' pos='0.06425 0 0.38' euler='180 0 0' size='0.01'/>
+      <site name='imu' pos='0 0 0' euler='0 -90 0' size='0.01'/>
+      <body name='left-hip-roll' pos='-0.001 0.091 0' euler='0 -90 -21.5'>
+        <inertial pos='-0.001967 0.000244 0.031435' mass='0.915088' fullinertia='0.001017 0.001148 0.000766 -3e-06 1.3e-05 -4e-06'/>
+        <joint name='left-hip-roll' type='hinge' axis='0 0 1' range='-60 60' limited='true' damping='1.000000' frictionloss='1.000000' armature='0.1728'/>
+        <geom type='mesh' mesh='left-hip-roll' material='robot'/>
+        <body name='left-hip-yaw' pos='-0.0505 0 0.044' euler='0 -90 0'>
+          <inertial pos='1e-05 -0.001945 0.042033' mass='0.818753' fullinertia='0.001627 0.001929 0.00077 -1e-06 2e-06 5.3e-05'/>
+          <joint name='left-hip-yaw' type='hinge' axis='0 0 1' range='-40 40' limited='true' damping='1.000000' frictionloss='1.000000' armature='0.0675'/>
+          <geom type='mesh' mesh='left-hip-yaw' material='robot'/>
+          <body name='left-hip-pitch' pos='0 0.004 0.068' euler='90 0 135'>
+            <inertial pos='0.060537 0.000521 -0.038857' mass='6.244279' fullinertia='0.011533 0.033345 0.033958 -0.000171 0.000148 0.000178'/>
+            <joint name='left-hip-pitch' type='hinge' axis='0 0 -1' range='-60 90' limited='true' damping='1.000000' frictionloss='0.500000' armature='0.120576'/>
+            <geom type='mesh' mesh='left-hip-pitch' material='robot'/>
+            <geom type='cylinder' size ='0.05 0.072' pos='0 0 -0.04' euler='0 0 0' class='collision'/>
+            <geom type='cylinder' size ='0.05 0.072' pos='0.12 0 -0.04' euler='0 0 0' class='collision'/>
+            <geom type='box' size='0.06 0.05 0.072' pos='0.06 0 -0.04' euler='0 0 0' class='collision'/>
+            <body name='left-achillies-rod' pos='0 0 0.046' euler='4.09 0.05 -82.27'>
+              <inertial pos='0.2506 0 0' mass='0.178148' fullinertia='3e-06 0.004501 0.004501 0 0 0'/>
+              <joint name='left-achillies-rod' type='ball' limited='false' damping='0.010000'/>
+              <geom type='mesh' mesh='left-achillies-rod' material='robot'/>
+              <geom type='capsule' size ='0.007 0.25' pos='0.25 0 0' euler='4 90 0' class='collision'/>
+            </body>
+            <body name='left-knee' pos='0.12 0 0.0045' euler='0 0 -90'>
+              <inertial pos='0.045641 0.042154 0.001657' mass='1.227077' fullinertia='0.002643 0.005098 0.007019 -0.001832 6.6e-05 4.5e-05'/>
+              <joint name='left-knee' type='hinge' axis='0 0 1' range='-71 50' limited='true' damping='1.000000' frictionloss='0.500000' armature='0.120576'/>
+              <geom type='mesh' mesh='left-knee' material='robot'/>
+              <body name='left-shin' pos='0.060677 0.047406 0' euler='0 0 0'>
+                <inertial pos='0.174265 0.010265 0.00107' mass='0.895793' fullinertia='0.001128 0.022492 0.022793 0.001098 0.000196 -3e-06'/>
+                <joint name='left-shin' type='hinge' axis='0 0 1' limited='false' stiffness='6000'/>
+                <geom type='mesh' mesh='left-shin' material='robot'/>
+                <geom type='cylinder' size ='0.03 0.1715' pos='0.23 0 0' euler='0 90 0' class='collision'/>
+                <geom type='cylinder' size ='0.05 0.1' pos='0.125 0.009 0' euler='90 84 0' class='collision'/>
+                <body name='left-tarsus' pos='0.434759 0.02 0' euler='0 0 103'>
+                  <inertial pos='0.100777 -0.029183 0.000678' mass='1.322865' fullinertia='0.000932 0.016409 0.016501 0.00061 0.000102 9e-06'/>
+                  <joint name='left-tarsus' type='hinge' axis='0 0 1' range='-50.3 71.6' limited='true'/>
+                  <geom type='mesh' mesh='left-tarsus' material='robot'/>
+                  <geom type='capsule' size ='0.02 0.18' pos='0.21 -0.03 0' euler='0 90 0' class='collision'/>
+                  <body name='left-heel-spring' pos='-0.01766 -0.029456 0.00104' euler='4.47 0.32 155.8'>
+                    <inertial pos='0.049086 0.004739 -4.5e-05' mass='0.230018' fullinertia='5.5e-05 0.00074 0.000701 1.5e-05 1e-06 -0'/>
+                    <joint name='left-heel-spring' type='hinge' axis='0 0 1' range='-6 6' limited='true' stiffness='4375'/>
+                    <geom type='mesh' mesh='left-heel-spring' material='robot'/>
+                  </body>
+                  <body name='left-toe-A' pos='0.059 -0.034 -0.0276' euler='-180 0 91.96'>
+                    <inertial pos='0.005161 1e-06 -0.002248' mass='0.139557' fullinertia='2.9e-05 5.8e-05 7.4e-05 0 -4e-06 -0'/>
+                    <joint name='left-toe-A' type='hinge' axis='0 0 1' range='-55.4 51.3' limited='true' damping='1.000000' frictionloss='1.000000' armature='0.035'/>
+                    <geom type='mesh' mesh='left-toe-A' material='robot'/>
+                    <body name='left-toe-A-rod' pos='0.057 0 -0.008' euler='0.34 2.14 -91.47'>
+                      <inertial pos='0.171071 0 0' mass='0.090983' fullinertia='1e-06 0.001182 0.001182 -0 -0 0'/>
+                      <joint name='left-toe-A-rod' type='ball' limited='false' damping='0.010000'/>
+                      <geom type='mesh' mesh='left-toe-A-rod' material='robot'/>
+                      <geom type='capsule' size ='0.007 0.17' pos='0.17 0 0' euler='4 90 0' class='collision'/>
+                    </body>
+                  </body>
+                  <body name='left-toe-B' pos='0.111 -0.034 0.0276' euler='0 0 -91.96'>
+                    <inertial pos='0.005161 1e-06 -0.002248' mass='0.139557' fullinertia='2.9e-05 5.8e-05 7.4e-05 0 -4e-06 -0'/>
+                    <joint name='left-toe-B' type='hinge' axis='0 0 1' range='-52.3 72.45' limited='true' damping='1.000000' frictionloss='1.000000' armature='0.035'/>
+                    <geom type='mesh' mesh='left-toe-B' material='robot'/>
+                    <body name='left-toe-B-rod' pos='0.057 0 -0.008' euler='-0.22 -3.08 91.38'>
+                      <inertial pos='0.142991 0 0' mass='0.079507' fullinertia='1e-06 0.000768 0.000768 -0 -0 0'/>
+                      <joint name='left-toe-B-rod' type='ball' limited='false' damping='0.010000'/>
+                      <geom type='mesh' mesh='left-toe-B-rod' material='robot'/>
+                      <geom type='capsule' size ='0.007 0.144' pos='0.144 0 0' euler='4 90 0' class='collision'/>
+                    </body>
+                  </body>
+                  <body name='left-toe-pitch' pos='0.408 -0.04 0' euler='0 0 68.5'>
+                    <inertial pos='-0.000141 2e-06 3e-06' mass='0.043881' fullinertia='5e-06 8e-06 4e-06 -0 0 0'/>
+                    <joint name='left-toe-pitch' type='hinge' axis='0 0 1' range='-45 45' limited='true'/>
+                    <geom type='mesh' mesh='left-toe-pitch' material='robot'/>
+                    <body name='left-toe-roll' pos='0 0 0' euler='0 90 0'>
+                      <inertial pos='9e-06 -0.028084 -0.023204' mass='0.531283' fullinertia='0.00187 0.001616 0.000843 -0 0 0.000566'/>
+                      <joint name='left-toe-roll' type='hinge' axis='0 0 1' range='-35 35' limited='true'/>
+                      <geom type='mesh' mesh='left-toe-roll' material='robot'/>
+                      <geom type='box' size='0.04 0.1175 0.0115' pos='0 -0.0437 -0.0255' euler='-60 0 0' class='collision'/>
+                      <site name='left-foot' pos='0 -0.05456 -0.0315' euler='-60 0 -90' size='0.01'/>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name='left-shoulder-roll' pos='-0.001 0.12 0.4' euler='-10 -90 0'>
+        <inertial pos='-0.000819 -0.003158 0.023405' mass='0.535396' fullinertia='0.000704 0.00075 0.000298 1.4e-05 1.2e-05 3.5e-05'/>
+        <joint name='left-shoulder-roll' type='hinge' axis='0 0 1' range='-75 75' limited='true' damping='2.000000' frictionloss='2.000000' armature='0.1728'/>
+        <geom type='mesh' mesh='left-shoulder-roll' material='robot'/>
+        <body name='left-shoulder-pitch' pos='-0.00317 -0.011055 0.0555' euler='90 -16 -45'>
+          <inertial pos='-4.2e-05 -0.061882 -0.073788' mass='1.440357' fullinertia='0.006761 0.002087 0.005778 -6e-06 -3e-06 -0.002046'/>
+          <joint name='left-shoulder-pitch' type='hinge' axis='0 0 -1' range='-145 145' limited='true' damping='2.000000' frictionloss='2.000000' armature='0.1728'/>
+          <geom type='mesh' mesh='left-shoulder-pitch' material='robot'/>
+          <geom type='cylinder' size ='0.038 0.07' pos='0 -0.093 -0.1' euler='90 0 0' class='collision'/>
+          <body name='left-shoulder-yaw' pos='0 -0.165 -0.1' euler='90 0 0'>
+            <inertial pos='-3e-05 0.001937 0.11407' mass='1.065387' fullinertia='0.006967 0.007003 0.000673 -1e-06 -1e-06 -1.5e-05'/>
+            <joint name='left-shoulder-yaw' type='hinge' axis='0 0 1' range='-100 100' limited='true' damping='1.000000' frictionloss='2.000000' armature='0.0675'/>
+            <geom type='mesh' mesh='left-shoulder-yaw' material='robot'/>
+            <geom type='cylinder' size ='0.038 0.0675' pos='0 0 0.092558' euler='0 0 0' class='collision'/>
+            <geom type='cylinder' size ='0.03 0.04' pos='0 -0.0035 0.185' euler='90 0 22.5' class='collision'/>
+            <body name='left-elbow' pos='0 -0.0385 0.185' euler='90 0 22.5'>
+              <inertial pos='0.107996 0.000521 -0.017765' mass='0.550582' fullinertia='0.000476 0.009564 0.009437 -2.9e-05 0.001403 9e-06'/>
+              <joint name='left-elbow' type='hinge' axis='0 0 1' range='-77.5 77.5' limited='true' damping='1.000000' frictionloss='2.000000' armature='0.1728'/>
+              <geom type='mesh' mesh='left-elbow' material='robot'/>
+              <geom type='cylinder' size ='0.013 0.1565' pos='0.184 0.01 -0.026' euler='-190 78 -180' class='collision'/>
+              <geom type='sphere' size='0.015' pos='0.37937 0 -0.061912' euler='0 0 0' class='collision'/>
+              <site name='left-hand' pos='0.369 0 -0.07912' euler='90 0 -10' size='0.01'/>
+            </body>
+          </body>
+        </body>
+      </body>
+      <site name='lidar' pos='0.025 0 0.4925' euler='0 0 15' size='0.01'/>
+      <site name='realsense-back' pos='-0.000607 0.025 -0.025283' euler='-180 45 180' size='0.01'/>
+      <site name='realsense-down' pos='0.0305 0.025 -0.03268' euler='0 90 0' size='0.01'/>
+      <site name='realsense-forward' pos='0.093981 0.0225 0.426449' euler='0 45 0' size='0.01'/>
+      <site name='realsense-front' pos='0.061607 0.025 -0.025283' euler='0 45 0' size='0.01'/>
+      <body name='right-hip-roll' pos='-0.001 -0.091 0' euler='0 -90 21.5'>
+        <inertial pos='-0.001967 -0.000244 0.031435' mass='0.915088' fullinertia='0.001017 0.001148 0.000766 3e-06 1.3e-05 4e-06'/>
+        <joint name='right-hip-roll' type='hinge' axis='0 0 1' range='-60 60' limited='true' damping='1.000000' frictionloss='1.000000' armature='0.1728'/>
+        <geom type='mesh' mesh='right-hip-roll' material='robot'/>
+        <body name='right-hip-yaw' pos='-0.0505 0 0.044' euler='0 -90 0'>
+          <inertial pos='1e-05 0.001945 0.042033' mass='0.818753' fullinertia='0.001627 0.001929 0.00077 1e-06 2e-06 -5.3e-05'/>
+          <joint name='right-hip-yaw' type='hinge' axis='0 0 1' range='-40 40' limited='true' damping='1.000000' frictionloss='1.000000' armature='0.0675'/>
+          <geom type='mesh' mesh='right-hip-yaw' material='robot'/>
+          <body name='right-hip-pitch' pos='0 -0.004 0.068' euler='-90 0 -135'>
+            <inertial pos='0.060537 -0.000521 -0.038857' mass='6.244279' fullinertia='0.011533 0.033345 0.033958 0.000171 0.000148 -0.000178'/>
+            <joint name='right-hip-pitch' type='hinge' axis='0 0 -1' range='-90 60' limited='true' damping='1.000000' frictionloss='0.500000' armature='0.120576'/>
+            <geom type='mesh' mesh='right-hip-pitch' material='robot'/>
+            <geom type='cylinder' size ='0.05 0.072' pos='0 0 -0.04' euler='0 0 0' class='collision'/>
+            <geom type='cylinder' size ='0.05 0.072' pos='0.12 0 -0.04' euler='0 0 0' class='collision'/>
+            <geom type='box' size='0.06 0.05 0.072' pos='0.06 0 -0.04' euler='0 0 0' class='collision'/>
+            <body name='right-achillies-rod' pos='0 0 0.046' euler='-4.09 0.05 82.27'>
+              <inertial pos='0.2506 0 0' mass='0.178148' fullinertia='3e-06 0.004501 0.004501 0 0 0'/>
+              <joint name='right-achillies-rod' type='ball' limited='false' damping='0.010000'/>
+              <geom type='mesh' mesh='right-achillies-rod' material='robot'/>
+              <geom type='capsule' size ='0.007 0.25' pos='0.25 0 0' euler='4 90 0' class='collision'/>
+            </body>
+            <body name='right-knee' pos='0.12 0 0.0045' euler='0 0 90'>
+              <inertial pos='0.045641 -0.042154 0.001657' mass='1.227077' fullinertia='0.002643 0.005098 0.007019 0.001832 6.6e-05 -4.5e-05'/>
+              <joint name='right-knee' type='hinge' axis='0 0 1' range='-50 71' limited='true' damping='1.000000' frictionloss='0.500000' armature='0.120576'/>
+              <geom type='mesh' mesh='right-knee' material='robot'/>
+              <body name='right-shin' pos='0.060677 -0.047406 0' euler='0 0 0'>
+                <inertial pos='0.174265 -0.010265 0.00107' mass='0.895793' fullinertia='0.001128 0.022492 0.022793 -0.001098 0.000196 3e-06'/>
+                <joint name='right-shin' type='hinge' axis='0 0 1' limited='false' stiffness='6000'/>
+                <geom type='mesh' mesh='right-shin' material='robot'/>
+                <geom type='cylinder' size ='0.03 0.1715' pos='0.23 0 0' euler='0 90 0' class='collision'/>
+                <geom type='cylinder' size ='0.05 0.1' pos='0.125 -0.009 0' euler='-90 84 0' class='collision'/>
+                <body name='right-tarsus' pos='0.434759 -0.02 0' euler='0 0 -103'>
+                  <inertial pos='0.100777 0.029183 0.000678' mass='1.322865' fullinertia='0.000932 0.016409 0.016501 -0.00061 0.000102 -9e-06'/>
+                  <joint name='right-tarsus' type='hinge' axis='0 0 1' range='-71.6 50.3' limited='true'/>
+                  <geom type='mesh' mesh='right-tarsus' material='robot'/>
+                  <geom type='capsule' size ='0.02 0.18' pos='0.21 0.03 0' euler='0 90 0' class='collision'/>
+                  <body name='right-heel-spring' pos='-0.01766 0.029456 0.00104' euler='-4.47 0.32 -155.8'>
+                    <inertial pos='0.049086 -0.004739 -4.5e-05' mass='0.230018' fullinertia='5.5e-05 0.00074 0.000701 -1.5e-05 1e-06 0'/>
+                    <joint name='right-heel-spring' type='hinge' axis='0 0 1' range='-6 6' limited='true' stiffness='4375'/>
+                    <geom type='mesh' mesh='right-heel-spring' material='robot'/>
+                  </body>
+                  <body name='right-toe-A' pos='0.059 0.034 -0.0276' euler='180 0 -91.96'>
+                    <inertial pos='0.005161 -1e-06 -0.002248' mass='0.139557' fullinertia='2.9e-05 5.8e-05 7.4e-05 -0 -4e-06 0'/>
+                    <joint name='right-toe-A' type='hinge' axis='0 0 1' range='-55.4 51.3' limited='true' damping='1.000000' frictionloss='1.000000' armature='0.035'/>
+                    <geom type='mesh' mesh='right-toe-A' material='robot'/>
+                    <body name='right-toe-A-rod' pos='0.057 0 -0.008' euler='-0.34 2.14 91.47'>
+                      <inertial pos='0.171071 0 0' mass='0.090983' fullinertia='1e-06 0.001182 0.001182 0 -0 0'/>
+                      <joint name='right-toe-A-rod' type='ball' limited='false' damping='0.010000'/>
+                      <geom type='mesh' mesh='right-toe-A-rod' material='robot'/>
+                      <geom type='capsule' size ='0.007 0.17' pos='0.17 0 0' euler='4 90 0' contype='2' conaffinity='1' class='collision'/>
+                    </body>
+                  </body>
+                  <body name='right-toe-B' pos='0.111 0.034 0.0276' euler='0 0 91.96'>
+                    <inertial pos='0.005161 -1e-06 -0.002248' mass='0.139557' fullinertia='2.9e-05 5.8e-05 7.4e-05 -0 -4e-06 0'/>
+                    <joint name='right-toe-B' type='hinge' axis='0 0 1' range='-52.3 72.45' limited='true' damping='1.000000' frictionloss='1.000000' armature='0.035'/>
+                    <geom type='mesh' mesh='right-toe-B' material='robot'/>
+                    <body name='right-toe-B-rod' pos='0.057 0 -0.008' euler='0.22 -3.08 -91.38'>
+                      <inertial pos='0.142991 0 0' mass='0.079507' fullinertia='1e-06 0.000768 0.000768 0 -0 0'/>
+                      <joint name='right-toe-B-rod' type='ball' limited='false' damping='0.010000'/>
+                      <geom type='mesh' mesh='right-toe-B-rod' material='robot'/>
+                      <geom type='capsule' size ='0.007 0.144' pos='0.144 0 0' euler='4 90 0' contype='2' conaffinity='1' class='collision'/>
+                    </body>
+                  </body>
+                  <body name='right-toe-pitch' pos='0.408 0.04 0' euler='0 0 -68.5'>
+                    <inertial pos='-0.000141 -2e-06 3e-06' mass='0.043881' fullinertia='5e-06 8e-06 4e-06 0 0 -0'/>
+                    <joint name='right-toe-pitch' type='hinge' axis='0 0 1' range='-45 45' limited='true'/>
+                    <geom type='mesh' mesh='right-toe-pitch' material='robot'/>
+                    <body name='right-toe-roll' pos='0 0 0' euler='0 90 0'>
+                      <inertial pos='9e-06 0.028084 -0.023204' mass='0.531283' fullinertia='0.00187 0.001616 0.000843 0 0 -0.000566'/>
+                      <joint name='right-toe-roll' type='hinge' axis='0 0 1' range='-35 35' limited='true'/>
+                      <geom type='mesh' mesh='right-toe-roll' material='robot'/>
+                      <geom type='box' size='0.04 0.1175 0.0115' pos='0 0.0437 -0.0255' euler='60 0 0' class='collision'/>
+                      <site name='right-foot' pos='0 0.05456 -0.0315' euler='60 0 90' size='0.01'/>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name='right-shoulder-roll' pos='-0.001 -0.12 0.4' euler='10 -90 0'>
+        <inertial pos='-0.000819 0.003158 0.023405' mass='0.535396' fullinertia='0.000704 0.00075 0.000298 -1.4e-05 1.2e-05 -3.5e-05'/>
+        <joint name='right-shoulder-roll' type='hinge' axis='0 0 1' range='-75 75' limited='true' damping='2.000000' frictionloss='2.000000' armature='0.1728'/>
+        <geom type='mesh' mesh='right-shoulder-roll' material='robot'/>
+        <body name='right-shoulder-pitch' pos='-0.00317 0.011055 0.0555' euler='-90 -16 45'>
+          <inertial pos='-4.2e-05 0.061882 -0.073788' mass='1.440357' fullinertia='0.006761 0.002087 0.005778 6e-06 -3e-06 0.002046'/>
+          <joint name='right-shoulder-pitch' type='hinge' axis='0 0 -1' range='-145 145' limited='true' damping='2.000000' frictionloss='2.000000' armature='0.1728'/>
+          <geom type='mesh' mesh='right-shoulder-pitch' material='robot'/>
+          <geom type='cylinder' size ='0.038 0.07' pos='0 0.093 -0.1' euler='-90 0 0' class='collision'/>
+          <body name='right-shoulder-yaw' pos='0 0.165 -0.1' euler='-90 0 0'>
+            <inertial pos='-3e-05 -0.001937 0.11407' mass='1.065387' fullinertia='0.006967 0.007003 0.000673 1e-06 -1e-06 1.5e-05'/>
+            <joint name='right-shoulder-yaw' type='hinge' axis='0 0 1' range='-100 100' limited='true' damping='1.000000' frictionloss='2.000000' armature='0.0675'/>
+            <geom type='mesh' mesh='right-shoulder-yaw' material='robot'/>
+            <geom type='cylinder' size ='0.038 0.0675' pos='0 0 0.092558' euler='0 0 0' class='collision'/>
+            <geom type='cylinder' size ='0.03 0.04' pos='0 -0.0035 0.185' euler='90 0 22.5' class='collision'/>
+            <body name='right-elbow' pos='0 0.0385 0.185' euler='-90 0 -22.5'>
+              <inertial pos='0.107996 -0.000521 -0.017765' mass='0.550582' fullinertia='0.000476 0.009564 0.009437 2.9e-05 0.001403 -9e-06'/>
+              <joint name='right-elbow' type='hinge' axis='0 0 1' range='-77.5 77.5' limited='true' damping='1.000000' frictionloss='2.000000' armature='0.1728'/>
+              <geom type='mesh' mesh='right-elbow' material='robot'/>
+              <geom type='cylinder' size ='0.013 0.1565' pos='0.184 0.01 -0.026' euler='-190 78 -180' class='collision'/>
+              <geom type='sphere' size='0.015' pos='0.37937 0 -0.061912' euler='0 0 0' class='collision'/>
+              <site name='right-hand' pos='0.369 0 -0.07912' euler='-90 0 10' size='0.01'/>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <equality>
+    <connect name='left-toe-A-rod' body1='left-toe-roll' body2='left-toe-A-rod' anchor='0.0179 -0.009551 -0.054164'/>
+    <connect name='left-toe-B-rod' body1='left-toe-roll' body2='left-toe-B-rod' anchor='-0.0181 -0.009551 -0.054164'/>
+    <connect name='left-achillies-rod' body1='left-heel-spring' body2='left-achillies-rod' anchor='0.113789 -0.011056 0'/>
+    <connect name='right-toe-A-rod' body1='right-toe-roll' body2='right-toe-A-rod' anchor='0.0179 0.009551 -0.054164'/>
+    <connect name='right-toe-B-rod' body1='right-toe-roll' body2='right-toe-B-rod' anchor='-0.0181 0.009551 -0.054164'/>
+    <connect name='right-achillies-rod' body1='right-heel-spring' body2='right-achillies-rod' anchor='0.113789 0.011056 0'/>
+  </equality>
+  <actuator>
+    <motor name='left-hip-roll' joint='left-hip-roll' gear='80' ctrllimited='true' ctrlrange='-1.4 1.4'/>
+    <motor name='left-hip-yaw' joint='left-hip-yaw' gear='50' ctrllimited='true' ctrlrange='-1.4 1.4'/>
+    <motor name='left-hip-pitch' joint='left-hip-pitch' gear='16' ctrllimited='true' ctrlrange='-12.5 12.5'/>
+    <motor name='left-knee' joint='left-knee' gear='16' ctrllimited='true' ctrlrange='-12.5 12.5'/>
+    <motor name='left-toe-A' joint='left-toe-A' gear='50' ctrllimited='true' ctrlrange='-0.9 0.9'/>
+    <motor name='left-toe-B' joint='left-toe-B' gear='50' ctrllimited='true' ctrlrange='-0.9 0.9'/>
+    <motor name='right-hip-roll' joint='right-hip-roll' gear='80' ctrllimited='true' ctrlrange='-1.4 1.4'/>
+    <motor name='right-hip-yaw' joint='right-hip-yaw' gear='50' ctrllimited='true' ctrlrange='-1.4 1.4'/>
+    <motor name='right-hip-pitch' joint='right-hip-pitch' gear='16' ctrllimited='true' ctrlrange='-12.5 12.5'/>
+    <motor name='right-knee' joint='right-knee' gear='16' ctrllimited='true' ctrlrange='-12.5 12.5'/>
+    <motor name='right-toe-A' joint='right-toe-A' gear='50' ctrllimited='true' ctrlrange='-0.9 0.9'/>
+    <motor name='right-toe-B' joint='right-toe-B' gear='50' ctrllimited='true' ctrlrange='-0.9 0.9'/>
+    <motor name='left-shoulder-roll' joint='left-shoulder-roll' gear='80' ctrllimited='true' ctrlrange='-1.4 1.4'/>
+    <motor name='left-shoulder-pitch' joint='left-shoulder-pitch' gear='80' ctrllimited='true' ctrlrange='-1.4 1.4'/>
+    <motor name='left-shoulder-yaw' joint='left-shoulder-yaw' gear='50' ctrllimited='true' ctrlrange='-1.4 1.4'/>
+    <motor name='left-elbow' joint='left-elbow' gear='80' ctrllimited='true' ctrlrange='-1.4 1.4'/>
+    <motor name='right-shoulder-roll' joint='right-shoulder-roll' gear='80' ctrllimited='true' ctrlrange='-1.4 1.4'/>
+    <motor name='right-shoulder-pitch' joint='right-shoulder-pitch' gear='80' ctrllimited='true' ctrlrange='-1.4 1.4'/>
+    <motor name='right-shoulder-yaw' joint='right-shoulder-yaw' gear='50' ctrllimited='true' ctrlrange='-1.4 1.4'/>
+    <motor name='right-elbow' joint='right-elbow' gear='80' ctrllimited='true' ctrlrange='-1.4 1.4'/>
+  </actuator>
+  <sensor>
+    <framepos  name='base-pos' objtype='body' objname='base' />
+    <framequat name='base-quat' objtype='body' objname='base' />
+    <jointpos name='left-hip-roll' joint='left-hip-roll'/>
+    <jointpos name='left-hip-yaw' joint='left-hip-yaw'/>
+    <jointpos name='left-hip-pitch' joint='left-hip-pitch'/>
+    <jointpos name='left-knee' joint='left-knee'/>
+    <jointpos name='left-toe-A' joint='left-toe-A'/>
+    <jointpos name='left-toe-B' joint='left-toe-B'/>
+    <jointpos name='right-hip-roll' joint='right-hip-roll'/>
+    <jointpos name='right-hip-yaw' joint='right-hip-yaw'/>
+    <jointpos name='right-hip-pitch' joint='right-hip-pitch'/>
+    <jointpos name='right-knee' joint='right-knee'/>
+    <jointpos name='right-toe-A' joint='right-toe-A'/>
+    <jointpos name='right-toe-B' joint='right-toe-B'/>
+    <jointpos name='left-shoulder-roll' joint='left-shoulder-roll'/>
+    <jointpos name='left-shoulder-pitch' joint='left-shoulder-pitch'/>
+    <jointpos name='left-shoulder-yaw' joint='left-shoulder-yaw'/>
+    <jointpos name='left-elbow' joint='left-elbow'/>
+    <jointpos name='right-shoulder-roll' joint='right-shoulder-roll'/>
+    <jointpos name='right-shoulder-pitch' joint='right-shoulder-pitch'/>
+    <jointpos name='right-shoulder-yaw' joint='right-shoulder-yaw'/>
+    <jointpos name='right-elbow' joint='right-elbow'/>
+    <frameangvel name='base-angvel' objtype='body' objname='base' />
+    <framelinvel name='base-linvel' objtype='body' objname='base' />
+    <jointvel name='left-hip-roll-vel' joint='left-hip-roll'/>
+    <jointvel name='left-hip-yaw-vel' joint='left-hip-yaw'/>
+    <jointvel name='left-hip-pitch-vel' joint='left-hip-pitch'/>
+    <jointvel name='left-knee-vel' joint='left-knee'/>
+    <jointvel name='left-shin-vel' joint='left-shin'/>
+    <jointvel name='left-tarsus-vel' joint='left-tarsus'/>
+    <jointvel name='left-toe-A-vel' joint='left-toe-A'/>
+    <jointvel name='left-toe-B-vel' joint='left-toe-B'/>
+    <jointvel name='right-hip-roll-vel' joint='right-hip-roll'/>
+    <jointvel name='right-hip-yaw-vel' joint='right-hip-yaw'/>
+    <jointvel name='right-hip-pitch-vel' joint='right-hip-pitch'/>
+    <jointvel name='right-knee-vel' joint='right-knee'/>
+    <jointvel name='right-shin-vel' joint='right-shin'/>
+    <jointvel name='right-tarsus-vel' joint='right-tarsus'/>
+    <jointvel name='right-toe-A-vel' joint='right-toe-A'/>
+    <jointvel name='right-toe-B-vel' joint='right-toe-B'/>
+    <jointvel name='left-shoulder-roll-vel' joint='left-shoulder-roll'/>
+    <jointvel name='left-shoulder-pitch-vel' joint='left-shoulder-pitch'/>
+    <jointvel name='left-shoulder-yaw-vel' joint='left-shoulder-yaw'/>
+    <jointvel name='left-elbow-vel' joint='left-elbow'/>
+    <jointvel name='right-shoulder-roll-vel' joint='right-shoulder-roll'/>
+    <jointvel name='right-shoulder-pitch-vel' joint='right-shoulder-pitch'/>
+    <jointvel name='right-shoulder-yaw-vel' joint='right-shoulder-yaw'/>
+    <jointvel name='right-elbow-vel' joint='right-elbow'/>
+  </sensor>
+</mujoco>
+

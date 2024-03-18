@@ -1,0 +1,7 @@
+<mujoco model="base-2_collision">
+<geom class="collision" type="mesh" mesh="base-2_part_0" pos='-0.001 -0.091 0' euler='0 -1.5708 0' friction='0.7 0.01 0.005'/>
+<geom class="collision" type="mesh" mesh="base-2_part_1" pos='-0.001 -0.091 0' euler='0 -1.5708 0' friction='0.7 0.01 0.005'/>
+<geom class="collision" type="mesh" mesh="base-2_part_2" pos='-0.001 -0.091 0' euler='0 -1.5708 0' friction='0.7 0.01 0.005'/>
+<geom class="collision" type="mesh" mesh="base-2_part_3" pos='-0.001 -0.091 0' euler='0 -1.5708 0' friction='0.7 0.01 0.005'/>
+<geom class="collision" type="mesh" mesh="base-2_part_4" pos='-0.001 -0.091 0' euler='0 -1.5708 0' friction='0.7 0.01 0.005'/>
+</mujoco>

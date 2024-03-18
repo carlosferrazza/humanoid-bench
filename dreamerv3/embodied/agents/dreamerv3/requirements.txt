@@ -1,0 +1,5 @@
+chex
+jax[cuda12_pip]
+jaxlib
+optax
+tensorflow_probability

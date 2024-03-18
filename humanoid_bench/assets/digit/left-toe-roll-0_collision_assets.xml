@@ -1,0 +1,18 @@
+<mujoco model="left-toe-roll-0_collision_assets">
+<mesh  file="left-toe-roll-0_split/left-toe-roll-0_part_0.obj"  name="left-toe-roll-0_part_0"/>
+<mesh  file="left-toe-roll-0_split/left-toe-roll-0_part_1.obj"  name="left-toe-roll-0_part_1"/>
+<mesh  file="left-toe-roll-0_split/left-toe-roll-0_part_2.obj"  name="left-toe-roll-0_part_2"/>
+<mesh  file="left-toe-roll-0_split/left-toe-roll-0_part_3.obj"  name="left-toe-roll-0_part_3"/>
+<mesh  file="left-toe-roll-0_split/left-toe-roll-0_part_4.obj"  name="left-toe-roll-0_part_4"/>
+<mesh  file="left-toe-roll-0_split/left-toe-roll-0_part_5.obj"  name="left-toe-roll-0_part_5"/>
+<mesh  file="left-toe-roll-0_split/left-toe-roll-0_part_6.obj"  name="left-toe-roll-0_part_6"/>
+<mesh  file="left-toe-roll-0_split/left-toe-roll-0_part_7.obj"  name="left-toe-roll-0_part_7"/>
+<mesh  file="left-toe-roll-0_split/left-toe-roll-0_part_8.obj"  name="left-toe-roll-0_part_8"/>
+<mesh  file="left-toe-roll-0_split/left-toe-roll-0_part_9.obj"  name="left-toe-roll-0_part_9"/>
+<mesh  file="left-toe-roll-0_split/left-toe-roll-0_part_10.obj"  name="left-toe-roll-0_part_10"/>
+<mesh  file="left-toe-roll-0_split/left-toe-roll-0_part_11.obj"  name="left-toe-roll-0_part_11"/>
+<mesh  file="left-toe-roll-0_split/left-toe-roll-0_part_12.obj"  name="left-toe-roll-0_part_12"/>
+<mesh  file="left-toe-roll-0_split/left-toe-roll-0_part_13.obj"  name="left-toe-roll-0_part_13"/>
+<mesh  file="left-toe-roll-0_split/left-toe-roll-0_part_14.obj"  name="left-toe-roll-0_part_14"/>
+<mesh  file="left-toe-roll-0_split/left-toe-roll-0_part_15.obj"  name="left-toe-roll-0_part_15"/>
+</mujoco>

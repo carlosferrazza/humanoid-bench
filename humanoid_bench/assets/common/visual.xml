@@ -1,0 +1,13 @@
+<mujocoinclude>
+    <visual>
+        <map force="0.1" fogend="10" shadowclip="5" />
+        <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0" />
+        <!--<quality shadowsize="16384" offsamples="16"/>-->
+        <quality shadowsize="16384"/>
+    </visual>
+    <asset>
+        <texture type="skybox" builtin="gradient" rgb1=".9 .9 .9" rgb2=".9 .9 .9" width="100" height="100"/>
+        <texture builtin="checker" height="100" width="100" name="texplane" rgb1="0.9 0.9 0.9" rgb2="0.9 0.9 0.9" type="2d" mark="edge" markrgb="0.7 0.7 0.7"/>
+        <material name="MatPlane" reflectance="0" shininess="1" specular="0.5" texrepeat="20 20" texture="texplane"/>
+    </asset>
+</mujocoinclude>

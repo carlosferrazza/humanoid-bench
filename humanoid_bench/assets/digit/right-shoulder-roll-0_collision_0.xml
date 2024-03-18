@@ -1,0 +1,8 @@
+<mujoco model="right-shoulder-roll-0_collision">
+<geom class="collision" type="mesh" mesh="right-shoulder-roll-0_part_0" pos='0 0 0' euler='0 0 0.279253' friction='0.7 0.01 0.005'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-roll-0_part_1" pos='0 0 0' euler='0 0 0.279253' friction='0.7 0.01 0.005'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-roll-0_part_2" pos='0 0 0' euler='0 0 0.279253' friction='0.7 0.01 0.005'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-roll-0_part_3" pos='0 0 0' euler='0 0 0.279253' friction='0.7 0.01 0.005'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-roll-0_part_4" pos='0 0 0' euler='0 0 0.279253' friction='0.7 0.01 0.005'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-roll-0_part_5" pos='0 0 0' euler='0 0 0.279253' friction='0.7 0.01 0.005'/>
+</mujoco>

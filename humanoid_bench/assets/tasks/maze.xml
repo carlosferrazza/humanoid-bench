@@ -1,0 +1,17 @@
+<mujocoinclude>
+    <worldbody>
+        <include file="../locomotion/generated_xml_maze.xml"/>
+        <site name="intersection_a" pos="0 0 1" />
+        <geom name="intersection_a" pos="0 0 1" size="0.05" rgba="0 0 0 1" contype="0" conaffinity="0" group="1" />
+
+        <site name="intersection_b" pos="3 0 1" />
+        <geom name="intersection_b" pos="3 0 1" size="0.05" rgba="0 0 0 1" contype="0" conaffinity="0" group="1" />
+
+        <site name="intersection_c" pos="3 6 1" />
+        <geom name="intersection_c" pos="3 6 1" size="0.05" rgba="0 0 0 1" contype="0" conaffinity="0" group="1" />
+
+        <site name="intersection_d" pos="6 6 1" />
+        <geom name="intersection_d" pos="6 6 1" size="0.05" rgba="0 0 0 1" contype="0" conaffinity="0" group="1" />
+        
+    </worldbody>
+</mujocoinclude>

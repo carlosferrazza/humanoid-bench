@@ -1,0 +1,6 @@
+<mujoco model="left-toe-B-0_collision_assets">
+<mesh  file="left-toe-B-0_split/left-toe-B-0_part_0.obj"  name="left-toe-B-0_part_0"/>
+<mesh  file="left-toe-B-0_split/left-toe-B-0_part_1.obj"  name="left-toe-B-0_part_1"/>
+<mesh  file="left-toe-B-0_split/left-toe-B-0_part_2.obj"  name="left-toe-B-0_part_2"/>
+<mesh  file="left-toe-B-0_split/left-toe-B-0_part_3.obj"  name="left-toe-B-0_part_3"/>
+</mujoco>

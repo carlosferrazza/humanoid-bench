@@ -1,0 +1,8 @@
+<mujoco model="base-3_collision_assets">
+<mesh  file="base-3_split/base-3_part_0.obj"  name="base-3_part_0"/>
+<mesh  file="base-3_split/base-3_part_1.obj"  name="base-3_part_1"/>
+<mesh  file="base-3_split/base-3_part_2.obj"  name="base-3_part_2"/>
+<mesh  file="base-3_split/base-3_part_3.obj"  name="base-3_part_3"/>
+<mesh  file="base-3_split/base-3_part_4.obj"  name="base-3_part_4"/>
+<mesh  file="base-3_split/base-3_part_5.obj"  name="base-3_part_5"/>
+</mujoco>

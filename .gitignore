@@ -1,0 +1,9 @@
+# python
+.python-version
+*.egg-info
+__pycache__/
+*.py[cod]
+dist
+
+# macOS
+.DS_Store

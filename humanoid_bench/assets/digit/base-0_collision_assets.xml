@@ -1,0 +1,20 @@
+<mujoco model="base-0_collision_assets">
+<mesh  file="base-0_split/base-0_part_0.obj"  name="base-0_part_0"/>
+<mesh  file="base-0_split/base-0_part_1.obj"  name="base-0_part_1"/>
+<mesh  file="base-0_split/base-0_part_2.obj"  name="base-0_part_2"/>
+<mesh  file="base-0_split/base-0_part_3.obj"  name="base-0_part_3"/>
+<mesh  file="base-0_split/base-0_part_4.obj"  name="base-0_part_4"/>
+<mesh  file="base-0_split/base-0_part_5.obj"  name="base-0_part_5"/>
+<mesh  file="base-0_split/base-0_part_6.obj"  name="base-0_part_6"/>
+<mesh  file="base-0_split/base-0_part_7.obj"  name="base-0_part_7"/>
+<mesh  file="base-0_split/base-0_part_8.obj"  name="base-0_part_8"/>
+<mesh  file="base-0_split/base-0_part_9.obj"  name="base-0_part_9"/>
+<mesh  file="base-0_split/base-0_part_10.obj"  name="base-0_part_10"/>
+<mesh  file="base-0_split/base-0_part_11.obj"  name="base-0_part_11"/>
+<mesh  file="base-0_split/base-0_part_12.obj"  name="base-0_part_12"/>
+<mesh  file="base-0_split/base-0_part_13.obj"  name="base-0_part_13"/>
+<mesh  file="base-0_split/base-0_part_14.obj"  name="base-0_part_14"/>
+<mesh  file="base-0_split/base-0_part_15.obj"  name="base-0_part_15"/>
+<mesh  file="base-0_split/base-0_part_16.obj"  name="base-0_part_16"/>
+<mesh  file="base-0_split/base-0_part_17.obj"  name="base-0_part_17"/>
+</mujoco>

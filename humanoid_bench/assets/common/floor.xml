@@ -1,0 +1,6 @@
+<mujocoinclude>
+    <worldbody>
+        <light pos="0 0 10" dir="0 0 -1" directional="true" ambient="0.1 0.1 0.1" diffuse="0.5 0.5 0.5" specular="0.3 0.3 0.3"/>
+        <geom name="floor" size="20 20 1" type="plane" conaffinity="1" material="MatPlane"/>
+    </worldbody>
+</mujocoinclude>

@@ -1,0 +1,8 @@
+<mujoco model="left-shoulder-roll-0_collision_assets">
+<mesh  file="left-shoulder-roll-0_split/left-shoulder-roll-0_part_0.obj"  name="left-shoulder-roll-0_part_0"/>
+<mesh  file="left-shoulder-roll-0_split/left-shoulder-roll-0_part_1.obj"  name="left-shoulder-roll-0_part_1"/>
+<mesh  file="left-shoulder-roll-0_split/left-shoulder-roll-0_part_2.obj"  name="left-shoulder-roll-0_part_2"/>
+<mesh  file="left-shoulder-roll-0_split/left-shoulder-roll-0_part_3.obj"  name="left-shoulder-roll-0_part_3"/>
+<mesh  file="left-shoulder-roll-0_split/left-shoulder-roll-0_part_4.obj"  name="left-shoulder-roll-0_part_4"/>
+<mesh  file="left-shoulder-roll-0_split/left-shoulder-roll-0_part_5.obj"  name="left-shoulder-roll-0_part_5"/>
+</mujoco>

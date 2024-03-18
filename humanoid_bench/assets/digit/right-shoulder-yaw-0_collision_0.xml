@@ -1,0 +1,28 @@
+<mujoco model="right-shoulder-yaw-0_collision">
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_0" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_1" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_2" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_3" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_4" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_5" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_6" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_7" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_8" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_9" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_10" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_11" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_12" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_13" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_14" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_15" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_16" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_17" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_18" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_19" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_20" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_21" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_22" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_23" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_24" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+<geom class="collision" type="mesh" mesh="right-shoulder-yaw-0_part_25" pos='0 0 0' euler='0 0 0' friction='0.7 0.01 0.005'  mass='1.065387'/>
+</mujoco>

@@ -1,0 +1,18 @@
+<mujoco model="h1hand_pos_window">
+    <option timestep="0.002" iterations="100" ls_iterations="50" solver="Newton">
+        <flag eulerdamp="enable"/>
+    </option>
+    <include file="../common/visual.xml"/>
+    <include file="../common/floor.xml"/>
+    <include file="../robots/h1hand_pos.xml"/>
+    <include file="../tasks/window.xml"/>
+    <keyframe>
+        <key name="qpos0" qpos="
+            0 0 0.98 1 0 0 0 0 0 -0.4 0.8 -0.4 0 0 -0.4 0.8 -0.4 0 0 0 0 0 0 0 0 0
+            0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+            0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+            0.45 0 1.085 0 0 0 0
+            0 0 0 0
+            "/>
+    </keyframe>
+</mujoco>

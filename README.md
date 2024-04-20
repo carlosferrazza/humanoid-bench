@@ -93,6 +93,15 @@ export VAR_PATH="data/reach_two_hands/var.npy"
 python -m humanoid_bench.test_env --env h1hand-push-v0 --policy_path ${POLICY_PATH} --mean_path ${MEAN_PATH} --var_path ${VAR_PATH} --policy_type "reach_double_relative"
 ```
 
+### Test Low-Level Reaching Policy (trained with MJX, testing on classical MuJoCo)
+```
+# One-hand reaching
+python -m humanoid_bench.mjx.mjx_test --with_full_model 
+
+# Two-hand reaching
+python -m humanoid_bench.mjx.mjx_test --with_full_model --task=reach_two_hands --folder=./data/reach_two_hands
+```
+
 ### Change Observations
 As a default, the environment returns a privileged state of the environment (e.g., robot state + environment state). To get proprio, visual, and tactile sensing, set `obs_wrapper=True` and accordingly select the required sensors, e.g. `sensors="proprio,image,tactile"`. When using tactile sensing, make sure to use `h1touch` in place of `h1hand`.
 Full test instruction:

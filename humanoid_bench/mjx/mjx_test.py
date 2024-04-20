@@ -5,7 +5,22 @@ import time
 from .flax_to_torch import TorchModel, TorchPolicy
 from humanoid_bench.mjx.envs.cpu_env import HumanoidNumpyEnv
 import tqdm
+import cv2
 from .video_utils import save_numpy_as_video, make_grid_video_from_numpy
+from PIL import Image
+from matplotlib import pyplot as plt
+import matplotlib.animation as animation
+
+images = []
+
+# Function to update the animation
+def update(img):
+    plt.clf()
+    plt.subplots_adjust(top = 1, bottom = 0, right = 1, left = 0, hspace = 0, wspace = 0)
+    plt.margins(0,0)
+    plt.imshow(img)
+    plt.axis('off')
+
 
 def main(args):
     if args.with_full_model:
@@ -61,20 +76,23 @@ def main(args):
         make_grid_video_from_numpy(all_videos, 8, output_name=os.path.join(args.folder, "evaluation.mp4"), **{'fps': 50})
         print("Rewards:", all_rewards)
     else:
-        # Rollout with mujoco viewer
-        # NOTE: reset not implemented, need to manually relaunch the script
-        with mujoco.viewer.launch_passive(m, d) as viewer:
+        renderer = mujoco.Renderer(m, height=480, width=480)
+        def get_image():
             state = env.reset()
-            print("State:", state)
-            viewer.sync()
-            time.sleep(0.02)
-            while viewer.is_running():
-               
+            while True:
                 action = torch_policy(state)
                 state, _, _, _ = env.step(action)
-               
-                viewer.sync()
-                time.sleep(0.02)
+                renderer.update_scene(d, camera='cam_default')
+                img = renderer.render()
+                
+                # time.sleep(0.02)
+                yield img
+
+        fig = plt.figure(figsize=(6, 6))
+        ani = animation.FuncAnimation(fig, update, frames=get_image(), interval=20)
+        plt.show()
+        
+
 
 if __name__ == '__main__':
     import argparse

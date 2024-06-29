@@ -19,26 +19,29 @@ Structure of the repository:
 * `tdmpc2`: Training code for TD-MPC2
 
 ## Installation
+Create a clean conda environment:
 ```
-# Install humanoid benchmark
+conda create -n humanoidbench python=3.11
+conda activate humanoidbench
+```
+Then, install the required packages:
+```
+# Install HumanoidBench
 pip install -e .
 
+# jax GPU version
+pip install "jax[cuda12]==0.4.28"
+# Or, jax CPU version
+pip install "jax[cpu]==0.4.28"
+
 # Install jaxrl
-pip install -e jaxrl_m
-pip install ml_collections flax distrax tf-keras
+pip install -r requirements_jaxrl.txt
 
 # Install dreamer
-pip install -e dreamerv3
-pip install ipdb wandb moviepy imageio opencv-python ruamel.yaml rich cloudpickle tensorflow tensorflow_probability dm-sonnet optax plotly msgpack zmq colored matplotlib
+pip install -r requirements_dreamer.txt
 
 # Install td-mpc2
-pip install -e tdmpc2
-pip install torch torchvision torchaudio hydra-core pyquaternion tensordict torchrl pandas hydra-submitit-launcher termcolor
-
-# jax GPU version
-pip install --upgrade "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-# Or, jax CPU version
-pip install --upgrade "jax[cpu]"
+pip install -r requirements_tdmpc.txt
 ```
 
 

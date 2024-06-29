@@ -4,8 +4,8 @@
     </option>
     <include file="../common/visual.xml"/>
     <include file="../common/floor.xml"/>
-    <include file="../robots/g1_torque.xml"/>
-    <keyframe>
+    <include file="../robots/digit_torque.xml"/>
+    <!-- <keyframe>
         <key name="qpos0" qpos="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0"/>
-    </keyframe>
+    </keyframe> -->
 </mujoco>

@@ -1,6 +1,6 @@
 <mujoco model='digit-v3'>
   <statistic center="0 0 0.55" extent="1.1"/>
-  <option iterations='50' solver='Newton' timestep='0.0005' gravity='0 0 -9.806' impratio='10'/>
+  <option iterations='50' solver='Newton' timestep='0.002' gravity='0 0 -9.806' impratio='10'/>
   <size nconmax='500' />
   <visual>
     <headlight diffuse="0.8 0.8 0.8"  ambient="0.4 0.4 0.4" specular="0.1 0.1 0.1"/>

@@ -78,6 +78,7 @@
 
   <worldbody>
     <body name="pelvis" pos="0 0 0.755" childclass="g1">
+      <camera name="cam_default" pos="2 3 0.8" mode="trackcom" xyaxes="-1 0.5 0 -0.2 -0.2 1"/>
       <inertial pos="0 0 -0.07605" quat="1 0 -0.000405289 0" mass="2.86" diaginertia="0.0079143 0.0069837 0.0059404"/>
       <freejoint name="floating_base_joint"/>
       <geom type="mesh" class="visual" mesh="pelvis"/>
@@ -412,6 +413,7 @@
     <gyro name="imu-angular-velocity" site="imu" cutoff="34.9"/>
     <accelerometer name="imu-linear-acceleration" site="imu" cutoff="157"/>
     <framequat name="imu-body-quat" objtype="site" objname="imu"/>
+    <subtreelinvel name="pelvis_subtreelinvel" body="pelvis"/>
   </sensor>
 
   <keyframe>

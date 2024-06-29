@@ -20,7 +20,7 @@ from .wrappers import (
     ObservationWrapper,
 )
 
-from .robots import H1, H1Hand, H1Touch, H1Strong
+from .robots import H1, H1Hand, H1Touch, H1Strong, G1, Digit
 from .envs.cube import Cube
 from .envs.bookshelf import BookshelfSimple, BookshelfHard
 from .envs.window import Window
@@ -60,7 +60,7 @@ DEFAULT_CAMERA_CONFIG = {
 }
 DEFAULT_RANDOMNESS = 0.01
 
-ROBOTS = {"h1": H1, "h1hand": H1Hand, "h1strong": H1Strong, "h1touch": H1Touch}
+ROBOTS = {"h1": H1, "h1hand": H1Hand, "h1strong": H1Strong, "h1touch": H1Touch, "g1": G1, "digit": Digit}
 TASKS = {
     "stand": Stand,
     "walk": Walk,

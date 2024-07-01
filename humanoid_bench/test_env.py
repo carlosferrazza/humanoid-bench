@@ -15,6 +15,7 @@ if __name__ == "__main__":
     parser.add_argument("--mean_path", default=None)
     parser.add_argument("--var_path", default=None)
     parser.add_argument("--policy_type", default=None)
+    parser.add_argument("--blocked_hands", default="False")
     parser.add_argument("--small_obs", default="False")
     parser.add_argument("--obs_wrapper", default="False")
     parser.add_argument("--sensors", default="")

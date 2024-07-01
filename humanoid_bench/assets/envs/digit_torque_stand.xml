@@ -1,4 +1,4 @@
-<mujoco model="g1_pos_stand">
+<mujoco model="digit_pos_stand">
     <option timestep="0.002" iterations="100" ls_iterations="50" solver="Newton">
         <flag eulerdamp="enable"/>
     </option>

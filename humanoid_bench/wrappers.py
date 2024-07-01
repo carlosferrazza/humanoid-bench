@@ -562,7 +562,7 @@ class ObservationWrapper(BaseWrapper):
             "rgb_array", camera_name="left_eye_camera"
         )
         right_eye = self.task._env.mujoco_renderer.render(
-            "rgb_array", camera_name="left_eye_camera"
+            "rgb_array", camera_name="right_eye_camera"
         )
         return {"image_left_eye": left_eye, "image_right_eye": right_eye}
 

@@ -23,7 +23,6 @@ class Task:
             return
 
         self._env.viewer = self._env.mujoco_renderer._get_viewer(self._env.render_mode)
-        
 
     @property
     def observation_space(self):

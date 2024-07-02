@@ -1,4 +1,4 @@
-<mujoco model="g1_pos_stand">
+<mujoco model="g1_torque_stand">
     <option timestep="0.002" iterations="100" ls_iterations="50" solver="Newton">
         <flag eulerdamp="enable"/>
     </option>
@@ -6,6 +6,6 @@
     <include file="../common/floor.xml"/>
     <include file="../robots/g1_torque.xml"/>
     <keyframe>
-        <key name="qpos0" qpos="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0"/>
+        <key name="qpos0" qpos="0 0 0.75 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1.57 0 0 0 0 0 0 0 0 0 0 0 1.57 0 0 0 0 0 0 0"/>
     </keyframe>
 </mujoco>

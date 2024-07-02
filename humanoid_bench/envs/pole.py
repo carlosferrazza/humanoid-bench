@@ -28,6 +28,12 @@ class Pole(Task):
     htarget_low = np.array([-2.5, -2.5, 0.3])
     htarget_high = np.array([50.0, 2.5, 1.8])
 
+    def __init__(self, robot=None, env=None, **kwargs):
+        super().__init__(robot, env, **kwargs)
+        if robot.__class__.__name__ == "G1":
+            global _STAND_HEIGHT
+            _STAND_HEIGHT = 1.28
+
     @property
     def observation_space(self):
         return Box(

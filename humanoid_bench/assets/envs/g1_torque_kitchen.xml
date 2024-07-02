@@ -1,0 +1,12 @@
+<mujoco model="g1_torque_kitchen">
+    <option timestep="0.002" iterations="100" ls_iterations="50" solver="Newton">
+        <flag eulerdamp="enable"/>
+    </option>
+    <include file="../common/visual.xml"/>
+    <include file="../common/floor.xml"/>
+    <include file="../robots/g1_torque.xml"/>
+    <include file="../tasks/kitchen.xml"/>
+    <keyframe>
+        <key name="qpos0" qpos="0 -0.6 0.75 1 0 0 1.57 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1.57 0 0 0 0 0 0 0 0 0 0 0 1.57 0 0 0 0 0 0 0 1.25561e-05 1.57437e-07 1.25561e-05 1.57437e-07 1.25561e-05 1.57437e-07 1.25561e-05 1.57437e-07 8.24417e-05 9.48283e-05 0 0 0 0 -0.269 0.35 0.994 1 1.34939e-19 -3.51612e-05 -7.50168e-19"/>
+    </keyframe>
+</mujoco>

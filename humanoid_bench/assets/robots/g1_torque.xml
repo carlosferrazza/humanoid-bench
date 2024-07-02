@@ -1,5 +1,5 @@
 <mujoco model="g1">
-  <compiler angle="radian" meshdir="../g1/assets" autolimits="true"/>
+  <compiler angle="radian" autolimits="true"/>
 
   <visual>
     <global ellipsoidinertia="true"/>
@@ -16,7 +16,7 @@
         <motor ctrlrange="-0.7 0.7"/>
       </default>
       <default class="visual">
-        <geom group="2" type="mesh" contype="0" conaffinity="0" density="0" material="metallic"/>
+        <geom group="2" type="mesh" contype="0" conaffinity="0" density="0.001" material="metallic"/>
       </default>
       <default class="collision">
         <geom group="3" type="mesh"/>
@@ -31,49 +31,49 @@
     <material name="metallic" rgba="0.7 0.7 0.7 1"/>
     <material name="black" rgba="0.2 0.2 0.2 1"/>
 
-    <mesh file="pelvis.STL"/>
-    <mesh file="pelvis_contour_link.STL"/>
-    <mesh file="left_hip_pitch_link.STL"/>
-    <mesh file="left_hip_roll_link.STL"/>
-    <mesh file="left_hip_yaw_link.STL"/>
-    <mesh file="left_knee_link.STL"/>
-    <mesh file="left_ankle_pitch_link.STL"/>
-    <mesh file="left_ankle_roll_link.STL"/>
-    <mesh file="right_hip_pitch_link.STL"/>
-    <mesh file="right_hip_roll_link.STL"/>
-    <mesh file="right_hip_yaw_link.STL"/>
-    <mesh file="right_knee_link.STL"/>
-    <mesh file="right_ankle_pitch_link.STL"/>
-    <mesh file="right_ankle_roll_link.STL"/>
-    <mesh file="torso_link.STL"/>
-    <mesh file="head_link.STL"/>
-    <mesh file="left_shoulder_pitch_link.STL"/>
-    <mesh file="left_shoulder_roll_link.STL"/>
-    <mesh file="left_shoulder_yaw_link.STL"/>
-    <mesh file="left_elbow_pitch_link.STL"/>
-    <mesh file="left_elbow_roll_link.STL"/>
-    <mesh file="right_shoulder_pitch_link.STL"/>
-    <mesh file="right_shoulder_roll_link.STL"/>
-    <mesh file="right_shoulder_yaw_link.STL"/>
-    <mesh file="right_elbow_pitch_link.STL"/>
-    <mesh file="right_elbow_roll_link.STL"/>
-    <mesh file="logo_link.STL"/>
-    <mesh file="left_palm_link.STL"/>
-    <mesh file="left_zero_link.STL"/>
-    <mesh file="left_one_link.STL"/>
-    <mesh file="left_two_link.STL"/>
-    <mesh file="left_three_link.STL"/>
-    <mesh file="left_four_link.STL"/>
-    <mesh file="left_five_link.STL"/>
-    <mesh file="left_six_link.STL"/>
-    <mesh file="right_palm_link.STL"/>
-    <mesh file="right_zero_link.STL"/>
-    <mesh file="right_one_link.STL"/>
-    <mesh file="right_two_link.STL"/>
-    <mesh file="right_three_link.STL"/>
-    <mesh file="right_four_link.STL"/>
-    <mesh file="right_five_link.STL"/>
-    <mesh file="right_six_link.STL"/>
+    <mesh file="../g1/assets/pelvis.STL"/>
+    <mesh file="../g1/assets/pelvis_contour_link.STL"/>
+    <mesh file="../g1/assets/left_hip_pitch_link.STL"/>
+    <mesh file="../g1/assets/left_hip_roll_link.STL"/>
+    <mesh file="../g1/assets/left_hip_yaw_link.STL"/>
+    <mesh file="../g1/assets/left_knee_link.STL"/>
+    <mesh file="../g1/assets/left_ankle_pitch_link.STL"/>
+    <mesh file="../g1/assets/left_ankle_roll_link.STL"/>
+    <mesh file="../g1/assets/right_hip_pitch_link.STL"/>
+    <mesh file="../g1/assets/right_hip_roll_link.STL"/>
+    <mesh file="../g1/assets/right_hip_yaw_link.STL"/>
+    <mesh file="../g1/assets/right_knee_link.STL"/>
+    <mesh file="../g1/assets/right_ankle_pitch_link.STL"/>
+    <mesh file="../g1/assets/right_ankle_roll_link.STL"/>
+    <mesh file="../g1/assets/torso_link.STL"/>
+    <mesh file="../g1/assets/head_link.STL"/>
+    <mesh file="../g1/assets/left_shoulder_pitch_link.STL"/>
+    <mesh file="../g1/assets/left_shoulder_roll_link.STL"/>
+    <mesh file="../g1/assets/left_shoulder_yaw_link.STL"/>
+    <mesh file="../g1/assets/left_elbow_pitch_link.STL"/>
+    <mesh file="../g1/assets/left_elbow_roll_link.STL"/>
+    <mesh file="../g1/assets/right_shoulder_pitch_link.STL"/>
+    <mesh file="../g1/assets/right_shoulder_roll_link.STL"/>
+    <mesh file="../g1/assets/right_shoulder_yaw_link.STL"/>
+    <mesh file="../g1/assets/right_elbow_pitch_link.STL"/>
+    <mesh file="../g1/assets/right_elbow_roll_link.STL"/>
+    <mesh file="../g1/assets/logo_link.STL"/>
+    <mesh file="../g1/assets/left_palm_link.STL"/>
+    <mesh file="../g1/assets/left_zero_link.STL"/>
+    <mesh file="../g1/assets/left_one_link.STL"/>
+    <mesh file="../g1/assets/left_two_link.STL"/>
+    <mesh file="../g1/assets/left_three_link.STL"/>
+    <mesh file="../g1/assets/left_four_link.STL"/>
+    <mesh file="../g1/assets/left_five_link.STL"/>
+    <mesh file="../g1/assets/left_six_link.STL"/>
+    <mesh file="../g1/assets/right_palm_link.STL"/>
+    <mesh file="../g1/assets/right_zero_link.STL"/>
+    <mesh file="../g1/assets/right_one_link.STL"/>
+    <mesh file="../g1/assets/right_two_link.STL"/>
+    <mesh file="../g1/assets/right_three_link.STL"/>
+    <mesh file="../g1/assets/right_four_link.STL"/>
+    <mesh file="../g1/assets/right_five_link.STL"/>
+    <mesh file="../g1/assets/right_six_link.STL"/>
   </asset>
 
   <worldbody>
@@ -220,6 +220,7 @@
                   <geom type="mesh" mesh="left_elbow_roll_link" class="collision"/>
                   <geom pos="0.12 0 0" type="mesh" class="visual" mesh="left_palm_link"/>
                   <geom pos="0.12 0 0" type="mesh" mesh="left_palm_link" class="collision"/>
+                  <site name="left_hand" pos="0.12 0 0" rgba="0 1 0 1" size="0.01"/>
                   <body name="left_zero_link" pos="0.17 0 0">
                     <inertial pos="-0.0260466 -0.00877511 1.08605e-05" quat="0.59241 0.381376 -0.592953 0.389884"
                       mass="0.0509893" diaginertia="8.68047e-06 7.23365e-06 4.58058e-06"/>
@@ -306,6 +307,7 @@
                   <geom type="mesh" mesh="right_elbow_roll_link" class="collision"/>
                   <geom pos="0.12 0 0" type="mesh" class="visual" mesh="right_palm_link"/>
                   <geom pos="0.12 0 0" type="mesh" mesh="right_palm_link" class="collision"/>
+                  <site name="right_hand" pos="0.12 0 0" rgba="0 1 0 1" size="0.01"/>
                   <body name="right_zero_link" pos="0.17 0 0">
                     <inertial pos="-0.0260466 0.00877511 1.08605e-05" quat="0.381376 0.59241 -0.389884 0.592953"
                       mass="0.0509893" diaginertia="8.68047e-06 7.23365e-06 4.58058e-06"/>
@@ -416,7 +418,7 @@
     <subtreelinvel name="pelvis_subtreelinvel" body="pelvis"/>
   </sensor>
 
-  <keyframe>
+  <!-- <keyframe>
     <key name="stand"
       qpos="
       0 0 0.75
@@ -428,5 +430,5 @@
       0 0 0 0 0
       0 0 0 0 0 0 0
       0 0 0 0 0 0 0"/>
-  </keyframe>
+  </keyframe> -->
 </mujoco>

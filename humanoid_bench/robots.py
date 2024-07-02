@@ -86,7 +86,3 @@ class H1Strong(H1):
 
 class G1 (H1):
     dof = 44
-
-
-class Digit (H1):
-    dof = 114

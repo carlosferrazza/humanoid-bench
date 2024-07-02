@@ -43,7 +43,7 @@ class H1:
 
     def joint_velocities(self):
         """Returns the joint velocities."""
-        return self._env.data.qvel[6 : self.dof].copy()
+        return self._env.data.qvel[6 : self.dof-1].copy()
 
     def control(self):
         """Returns a copy of the control signals for the actuators."""

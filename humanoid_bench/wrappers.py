@@ -38,6 +38,7 @@ class BaseWrapper(Task):
         self._env = task._env
         self.task = task
         self.unwrapped = task.unwrapped
+        self.dof = task.dof
         # self._env.unwrapped = task._env.unwrapped
     
     def reset_model(self):

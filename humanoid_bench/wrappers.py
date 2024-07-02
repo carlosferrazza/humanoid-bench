@@ -446,6 +446,7 @@ class ObservationWrapper(BaseWrapper):
         sensors = kwargs.get("sensors").split(",")
         self._tactile_ob = "tactile" in sensors
         self._camera_ob = "image" in sensors
+        self._privileged_ob = "privileged" in sensors
 
         if self._tactile_ob:
             assert (
@@ -487,39 +488,47 @@ class ObservationWrapper(BaseWrapper):
                 )
                 for key in tactile_example
             ]
+        if self._privileged_ob:
+            privileged_space = self._env.observation_space
 
-        if self._tactile_ob and self._camera_ob:
-            return Dict([("proprio", proprio_space)] + camera_spaces + tactile_spaces)
-        elif self._tactile_ob:
-            return Dict([("proprio", proprio_space)] + tactile_spaces)
-        elif self._camera_ob:
-            return Dict([("proprio", proprio_space)] + camera_spaces)
-        else:
+        if not self._privileged_ob and not self._tactile_ob and not self._camera_ob:
             return proprio_space
+
+        spaces = [("proprio", proprio_space)]
+        if self._privileged_ob:
+            spaces.append(("privileged", privileged_space))
+        if self._tactile_ob:
+            spaces.extend(tactile_spaces)
+        if self._camera_ob:
+            spaces.extend(camera_spaces)
+            
+        return Dict(spaces)
 
     def get_obs(self):
         position = self.task._env.robot.joint_angles()
         velocity = self.task._env.robot.joint_velocities()
         state = np.concatenate((position, velocity))
 
+        if not self._privileged_ob and not self._tactile_ob and not self._camera_ob:
+            return state
+
+        obses = [("proprio", state)]
+
         tactile = None
         if self._tactile_ob:
             tactile = self.get_tactile_obs()
+            obses.extend(list(tactile.items()))
 
         camera = None
         if self._camera_ob:
             camera = self.get_camera_obs()
+            obses.extend(list(camera.items()))
 
-        if tactile and camera:
-            state = dict(
-                [("proprio", state)] + list(tactile.items()) + list(camera.items())
-            )
-        elif tactile:
-            state = dict([("proprio", state)] + list(tactile.items()))
-        elif camera:
-            state = dict([("proprio", state)] + list(camera.items()))
+        if self._privileged_ob:
+            privileged = self._env.get_obs()
+            obses.append(("privileged", privileged))
 
-        return state
+        return dict(obses)
 
     def get_tactile_obs(self):
         """

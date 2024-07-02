@@ -135,6 +135,37 @@ In addition to the main benchmark tasks listed above, you can run the following 
 * `h1-slide-v0`
 * `h1-pole-v0`
 
+And the Unitree G1 robot with three-finger hands:
+* `g1-walk-v0`
+* `g1-reach-v0`
+* `g1-hurdle-v0`
+* `g1-crawl-v0`
+* `g1-maze-v0`
+* `g1-push-v0`
+* `g1-cabinet-v0`
+* `g1-door-v0`
+* `g1-truck-v0`
+* `g1-cube-v0`
+* `g1-bookshelf_simple-v0`
+* `g1-bookshelf_hard-v0`
+* `g1-basketball-v0`
+* `g1-window-v0`
+* `g1-spoon-v0`
+* `g1-kitchen-v0`
+* `g1-package-v0`
+* `g1-powerlift-v0`
+* `g1-room-v0`
+* `g1-stand-v0`
+* `g1-run-v0`
+* `g1-sit_simple-v0`
+* `g1-sit_hard-v0`
+* `g1-balance_simple-v0`
+* `g1-balance_hard-v0`
+* `g1-stair-v0`
+* `g1-slide-v0`
+* `g1-pole-v0`
+* `g1-insert_normal-v0`
+* `g1-insert_small-v0`
 
 ## Training
 ```

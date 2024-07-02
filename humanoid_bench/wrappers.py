@@ -525,7 +525,7 @@ class ObservationWrapper(BaseWrapper):
             obses.extend(list(camera.items()))
 
         if self._privileged_ob:
-            privileged = self._env.get_obs()
+            privileged = self.task.get_obs()
             obses.append(("privileged", privileged))
 
         return dict(obses)

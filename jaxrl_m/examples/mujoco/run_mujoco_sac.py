@@ -31,7 +31,7 @@ flags.DEFINE_integer('eval_interval', 10000, 'Eval interval.')
 flags.DEFINE_integer('save_interval', 25000, 'Eval interval.')
 flags.DEFINE_integer('render_interval', 250000, 'Render interval.')
 flags.DEFINE_integer('batch_size', 64, 'Mini batch size.')
-flags.DEFINE_integer('max_steps', int(1e6), 'Number of training steps.')
+flags.DEFINE_integer('max_steps', int(1e7), 'Number of training steps.')
 flags.DEFINE_integer('start_steps', int(1e4), 'Number of initial exploration steps.')
 flags.DEFINE_string('wandb_entity', 'robot-learning', 'Wandb entity.')
 

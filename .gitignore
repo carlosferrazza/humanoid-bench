@@ -8,5 +8,10 @@ dist
 # macOS
 .DS_Store
 
-# other
+# others
 logdir
+logs
+models
+outputs
+runs
+wandb

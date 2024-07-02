@@ -1,0 +1,9 @@
+<mujoco model="g1_torque_pole">
+    <option timestep="0.002" iterations="100" ls_iterations="50" solver="Newton">
+        <flag eulerdamp="enable"/>
+    </option>
+    <include file="../common/visual.xml"/>
+    <include file="../common/floor.xml"/>
+    <include file="../robots/g1_torque.xml"/>
+    <include file="../tasks/pole.xml"/>
+</mujoco>

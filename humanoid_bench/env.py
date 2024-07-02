@@ -20,7 +20,7 @@ from .wrappers import (
     ObservationWrapper,
 )
 
-from .robots import H1, H1Hand, H1Touch, H1Strong
+from .robots import H1, H1Hand, H1Touch, H1Strong, G1
 from .envs.cube import Cube
 from .envs.bookshelf import BookshelfSimple, BookshelfHard
 from .envs.window import Window
@@ -60,7 +60,7 @@ DEFAULT_CAMERA_CONFIG = {
 }
 DEFAULT_RANDOMNESS = 0.01
 
-ROBOTS = {"h1": H1, "h1hand": H1Hand, "h1strong": H1Strong, "h1touch": H1Touch}
+ROBOTS = {"h1": H1, "h1hand": H1Hand, "h1strong": H1Strong, "h1touch": H1Touch, "g1": G1}
 TASKS = {
     "stand": Stand,
     "walk": Walk,
@@ -130,6 +130,12 @@ class HumanoidEnv(MujocoEnv, gym.utils.EzPickle):
         else:
             self.obs_wrapper = False
 
+        self.blocked_hands = kwargs.get("blocked_hands", None)
+        if self.blocked_hands is not None:
+            self.blocked_hands = kwargs.get("blocked_hands", "False").lower() == "true"
+        else:
+            self.blocked_hands = False
+
         MujocoEnv.__init__(
             self,
             model_path,
@@ -150,6 +156,9 @@ class HumanoidEnv(MujocoEnv, gym.utils.EzPickle):
 
         self.task = TASKS[task](self.robot, self, **kwargs)
 
+        if self.blocked_hands:
+            self.task = BlockedHandsLocoWrapper(self.task, **kwargs)
+
         # Wrap for hierarchical control
         if (
             "policy_type" in kwargs
@@ -166,11 +175,11 @@ class HumanoidEnv(MujocoEnv, gym.utils.EzPickle):
             elif kwargs["policy_type"] == "reach_double_relative":
                 assert "policy_path" in kwargs and kwargs["policy_path"] is not None
                 self.task = DoubleReachRelativeWrapper(self.task, **kwargs)
-            elif kwargs["policy_type"] == "blocked_hands":
-                self.task = BlockedHandsLocoWrapper(self.task, **kwargs)
             else:
                 raise ValueError(f"Unknown policy_type: {kwargs['policy_type']}")
-        elif self.obs_wrapper:
+        
+
+        if self.obs_wrapper:
             # Note that observation wrapper is not compatible with hierarchical policy
             self.task = ObservationWrapper(self.task, **kwargs)
             self.observation_space = self.task.observation_space

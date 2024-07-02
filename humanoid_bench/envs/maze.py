@@ -17,9 +17,26 @@ class MazeBase(Task):
         "h1": "0 0 0.98 1 0 0 0 0 0 -0.4 0.8 -0.4 0 0 -0.4 0.8 -0.4 0 0 0 0 0 0 0 0 0",
         "h1hand": "0 0 0.98 1 0 0 0 0 0 -0.4 0.8 -0.4 0 0 -0.4 0.8 -0.4 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0",
         "h1touch": "0 0 0.98 1 0 0 0 0 0 -0.4 0.8 -0.4 0 0 -0.4 0.8 -0.4 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0",
+        "g1": """
+            0 0 0.75
+            1 0 0 0
+            0 0 0 0 0 0
+            0 0 0 0 0 0
+            0
+            0 0 0 0 -1.57
+            0 0 0 0 0 0 0
+            0 0 0 0 1.57
+            0 0 0 0 0 0 0
+        """
     }
     htarget_low = np.array([-1, -1, 0.8])
     htarget_high = np.array([7, 7, 1.2])
+
+    def __init__(self, robot=None, env=None, **kwargs):
+        super().__init__(robot, env, **kwargs)
+        if robot.__class__.__name__ == "G1":
+            global _STAND_HEIGHT
+            _STAND_HEIGHT = 1.28
 
     @property
     def observation_space(self):

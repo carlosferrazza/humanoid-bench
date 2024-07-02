@@ -25,6 +25,19 @@ class Cube(Task):
             0.45 0.21 1.125 1 0 0 0
             0.45 -0.21 1.125 1 0 0 0
         """,
+        "g1": """
+            0 0 0.75
+            1 0 0 0
+            0 0 0 0 0 0
+            0 0 0 0 0 0
+            0
+            0 0 0 0 -1.57
+            0 0 0 0 0 0 0
+            0 0 0 0 1.57
+            0 0 0 0 0 0 0
+            0.35 0.16 0.895 1 0 0 0
+            0.35 -0.16 0.895 1 0 0 0
+        """
     }
     dof = 14
     max_episode_steps = 500
@@ -33,6 +46,9 @@ class Cube(Task):
 
     def __init__(self, robot=None, env=None, **kwargs):
         super().__init__(robot, env, **kwargs)
+        if robot.__class__.__name__ == "G1":
+            global _STAND_HEIGHT
+            _STAND_HEIGHT = 1.28
 
     @property
     def observation_space(self):

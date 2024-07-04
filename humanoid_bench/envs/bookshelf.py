@@ -98,6 +98,8 @@ class BookshelfBase(Task):
     )
     bookshelf_objects = [-19, -22, -15, -20, -23, -23]  # placeholder last element
     success_bar = 2000
+    htarget_low = np.array([0.5, -0.5, 0.])
+    htarget_high = np.array([1.5, 0.5, 2.0])
 
     def __init__(self, robot=None, env=None, **kwargs):
         super().__init__(robot, env, **kwargs)

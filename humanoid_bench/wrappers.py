@@ -116,6 +116,10 @@ class SingleReachWrapper(BaseWrapper):
         else:
             self.act_idxs = list(range(19))
 
+    def reset_model(self):
+        self.last_target = np.zeros(3)
+        return super().reset_model()
+
     def get_last_target(self):
         return self.last_target
 
@@ -237,6 +241,12 @@ class DoubleReachBaseWrapper(BaseWrapper):
             self.act_idxs = list(range(15)) + list(range(16, 20))
         else:
             self.act_idxs = list(range(19))
+
+    def reset_model(self):
+        self.last_target_left = np.zeros(3)
+        self.last_target_right = np.zeros(3)
+        self.last_coords = np.zeros(3)
+        return super().reset_model()
 
     def unnormalize_target(self, target):
         return target * self.max_delta

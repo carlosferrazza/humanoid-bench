@@ -26,8 +26,8 @@ class Walk(Task):
         "g1": "0 0 0.75 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1.57 0 0 0 0 0 0 0 0 0 0 0 1.57 0 0 0 0 0 0 0"
     }
     _move_speed = _WALK_SPEED
-    htarget_low = np.array([-10.0, -2.0, 0.8])
-    htarget_high = np.array([1000.0, 2.0, 2.0])
+    htarget_low = np.array([-1.0, -1.0, 0.8])
+    htarget_high = np.array([1000.0, 1.0, 2.0])
     success_bar = 700
 
     def __init__(self, robot=None, env=None, **kwargs):

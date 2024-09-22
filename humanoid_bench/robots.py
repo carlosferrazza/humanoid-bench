@@ -75,10 +75,11 @@ class H1:
 class H1Hand(H1):
     dof = 76
 
+class H1SimpleHand(H1):
+    dof = 52    
 
 class H1Touch(H1):
     dof = 76
-
 
 class H1Strong(H1):
     dof = 76

@@ -135,6 +135,9 @@ In addition to the main benchmark tasks listed above, you can run the following 
 * `h1-slide-v0`
 * `h1-pole-v0`
 
+The robot with low-dimensional hands:
+* `h1simplehand-pole-v0`
+
 And the Unitree G1 robot with three-finger hands:
 * `g1-walk-v0`
 * `g1-reach-v0`

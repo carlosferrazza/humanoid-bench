@@ -167,6 +167,27 @@ class WorldModel(nn.Module):
         mu, pi, log_pi = math.squash(mu, pi, log_pi)
 
         return mu, pi, log_pi, log_std
+    
+    def log_pi_action(self, z, a, task):
+        """
+        Compute the log probability of an action sequence given the latent states.
+        """
+        if self.cfg.multitask:
+            z = self.task_emb(z, task)
+        mu, log_std = self._pi(z).chunk(2, dim=-1)
+        eps = (a - mu) / (log_std.exp() + 1e-8)
+
+        if self.cfg.multitask:  # Mask out unused action dimensions
+            mu = mu * self._action_masks[task]
+            log_std = log_std * self._action_masks[task]
+            eps = eps * self._action_masks[task]
+            action_dims = self._action_masks.sum(-1)[task].unsqueeze(-1)
+        else:  # No masking
+            action_dims = None
+            
+        log_pi = math.gaussian_logprob(eps, log_std, size=action_dims)
+        return log_pi
+        
 
     def Q(self, z, a, task, return_type="min", target=False):
         """

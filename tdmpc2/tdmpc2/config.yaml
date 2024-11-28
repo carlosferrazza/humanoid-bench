@@ -43,6 +43,9 @@ temperature: 0.5
 log_std_min: -10
 log_std_max: 2
 entropy_coef: 1e-4
+awac_lambda: 0.3333
+exp_adv_min: 0.1
+exp_adv_max: 10.0
 
 # critic
 num_bins: 101

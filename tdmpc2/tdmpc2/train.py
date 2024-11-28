@@ -17,7 +17,8 @@ from tdmpc2.common.parser import parse_cfg
 from tdmpc2.common.seed import set_seed
 from tdmpc2.common.buffer import Buffer
 from tdmpc2.envs import make_env
-from tdmpc2.tdmpc2 import TDMPC2
+#from tdmpc2.tdmpc2 import TDMPC2
+from tdmpc2.tdmpc25 import TDMPC2
 from tdmpc2.trainer.offline_trainer import OfflineTrainer
 from tdmpc2.trainer.online_trainer import OnlineTrainer
 from tdmpc2.common.logger import Logger

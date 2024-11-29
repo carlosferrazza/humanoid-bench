@@ -32,7 +32,7 @@ class OnlineTrainer(Trainer):
             if self.cfg.save_video:
                 self.logger.video.init(self.env, enabled=(i == 0))
             while not done:
-                action = self.agent.act(obs, t0=t == 0, eval_mode=True)
+                action, _, _ = self.agent.act(obs, t0=t == 0, eval_mode=True)
                 obs, reward, done, truncated, info = self.env.step(action)
                 done = done or truncated
                 ep_reward += reward
@@ -44,12 +44,29 @@ class OnlineTrainer(Trainer):
             if self.cfg.save_video:
                 # self.logger.video.save(self._step)
                 self.logger.video.save(self._step, key='results/video')
+        
+        if self.cfg.eval_pi:
+            # Evaluate trained pi
+            ep_rewards_pi, ep_successes_pi = [], []
+            for i in range(self.cfg.eval_episodes):
+                obs, done, ep_reward, t = self.env.reset()[0], False, 0, 0
+                while not done:
+                    action, _, _ = self.agent.act(obs, t0=t == 0, eval_mode=True, use_pi=True)
+                    obs, reward, done, truncated, info = self.env.step(action)
+                    done = done or truncated
+                    ep_reward += reward
+                    t += 1
+                ep_rewards_pi.append(ep_reward)
+                ep_successes_pi.append(info["success"])
+            
         return dict(
             episode_reward=np.nanmean(ep_rewards),
             episode_success=np.nanmean(ep_successes),
+            episode_reward_pi=np.nanmean(ep_rewards_pi) if self.cfg.eval_pi else np.nan,
+            episode_success_pi=np.nanmean(ep_successes_pi) if self.cfg.eval_pi else np.nan,
         )
 
-    def to_td(self, obs, action=None, reward=None):
+    def to_td(self, obs, action=None, mu=None, std=None, reward=None):
         """Creates a TensorDict for a new episode."""
         if isinstance(obs, dict):
             obs = TensorDict(obs, batch_size=(), device="cpu")
@@ -57,12 +74,18 @@ class OnlineTrainer(Trainer):
             obs = obs.unsqueeze(0).cpu()
         if action is None:
             action = torch.full_like(self.env.rand_act(), float("nan"))
+        if mu is None:
+            mu = torch.full_like(action, float("nan"))
+        if std is None:
+            std = torch.full_like(action, float("nan"))
         if reward is None:
             reward = torch.tensor(float("nan"))
         td = TensorDict(
             dict(
                 obs=obs,
                 action=action.unsqueeze(0),
+                mu=mu.unsqueeze(0),
+                std=std.unsqueeze(0),
                 reward=reward.unsqueeze(0),
             ),
             batch_size=(1,),
@@ -109,12 +132,13 @@ class OnlineTrainer(Trainer):
 
             # Collect experience
             if self._step > self.cfg.seed_steps:
-                action = self.agent.act(obs, t0=len(self._tds) == 1)
+                action, mu, std = self.agent.act(obs, t0=len(self._tds) == 1)
             else:
                 action = self.env.rand_act()
+                mu, std = action.detach().clone(), torch.full_like(action, 1.0)  # noqa
             obs, reward, done, truncated, info = self.env.step(action)
             done = done or truncated
-            self._tds.append(self.to_td(obs, action, reward))
+            self._tds.append(self.to_td(obs, action, mu, std, reward))
 
             # Update agent
             if self._step >= self.cfg.seed_steps:

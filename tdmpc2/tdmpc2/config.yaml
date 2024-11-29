@@ -8,10 +8,11 @@ obs: state
 # evaluation
 checkpoint: ???
 eval_episodes: 1
+eval_pi: true
 eval_freq: 50000
 
 # training
-steps: 10_000_000
+steps: 2_000_000
 batch_size: 256
 reward_coef: 0.1
 value_coef: 0.1
@@ -40,9 +41,14 @@ max_std: 2
 temperature: 0.5
 
 # actor
+actor_mode: "residual" # ["awac", "sac", "residual", "bc"]
 log_std_min: -10
 log_std_max: 2
 entropy_coef: 1e-4
+awac_lambda: 1.0 # 0.3333
+prior_coef: 5.0
+exp_adv_min: 0.1
+exp_adv_max: 10.0
 
 # critic
 num_bins: 101

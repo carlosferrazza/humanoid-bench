@@ -94,7 +94,7 @@ class TDMPC2:
         self.model.load_state_dict(state_dict["model"])
 
     @torch.no_grad()
-    def act(self, obs, t0=False, eval_mode=False, task=None):
+    def act(self, obs, t0=False, eval_mode=False, task=None, use_pi=False):
         """
         Select an action by planning in the latent space of the world model.
 
@@ -111,11 +111,20 @@ class TDMPC2:
         if task is not None:
             task = torch.tensor([task], device=self.device)
         z = self.model.encode(obs, task)
-        if self.cfg.mpc:
-            a = self.plan(z, t0=t0, eval_mode=eval_mode, task=task)
+        if self.cfg.mpc and not use_pi:
+            a, mu, std = self.plan(z, t0=t0, eval_mode=eval_mode, task=task)
         else:
-            a = self.model.pi(z, task)[int(not eval_mode)][0]
-        return a.cpu()
+            mu, pi, log_pi, log_std = self.model.pi(z, task)
+            # print("mu:", mu.shape)
+            # print("pi:", pi.shape)
+            # print("log_pi:", log_pi.shape)
+            # print("log_std:", log_std.shape)
+            if eval_mode:
+                a = mu[0]
+            else:
+                a = pi[0]
+            mu, std = mu[0], log_std.exp()[0]
+        return a.cpu(), mu.cpu(), std.cpu()
 
     @torch.no_grad()
     def _estimate_value(self, z, actions, task):
@@ -223,12 +232,14 @@ class TDMPC2:
         score = score.squeeze(1).cpu().numpy()
         actions = elite_actions[:, np.random.choice(np.arange(score.shape[0]), p=score)]
         self._prev_mean = mean
-        a, std = actions[0], std[0]
+        mu, std = actions[0], std[0]
         if not eval_mode:
-            a += std * torch.randn(self.cfg.action_dim, device=std.device)
-        return a.clamp_(-1, 1)
+            a = mu + std * torch.randn(self.cfg.action_dim, device=std.device)
+        else:
+            a = mu
+        return a.clamp_(-1, 1), mu, std
 
-    def update_pi(self, zs, action, task):
+    def update_pi(self, zs, action, mu, std, task):
         """
         Update policy using a sequence of latent states.
 
@@ -246,23 +257,54 @@ class TDMPC2:
         # print("zs:", zs.shape)
         # print("action:", action.shape)
         # print("pis", pis.shape)
+        qs = self.model.Q(zs, pis, task, return_type="avg")
+        self.scale.update(qs[0])
+        qs = self.scale(qs)
+            
+        rho = torch.pow(self.cfg.rho, torch.arange(len(qs), device=self.device))
+        if self.cfg.actor_mode=="sac":
+            # Loss is a weighted sum of Q-values.
+            # TD-MPC2 setting.
+            pi_loss = ((self.cfg.entropy_coef * log_pis - qs).mean(dim=(1, 2)) * rho).mean()
+            prior_loss = torch.zeros_like(pi_loss) # Not used
+            q_loss = pi_loss.detach().clone()
 
-        with torch.no_grad():
-            qs = self.model.Q(zs, pis, task, return_type="avg")
-            self.scale.update(qs[0])
-            qs = self.scale(qs)
+        elif self.cfg.actor_mode=="awac":
             vs = self.model.Q(zs, action, task, return_type="avg")
             vs = self.scale(vs)
+            # Loss for AWAC
+            adv = (qs - vs).detach()
+            weights = weights = torch.clamp(torch.exp(adv / self.cfg.awac_lambda), self.cfg.exp_adv_min, self.cfg.exp_adv_max)
+            log_pis_action = self.model.log_pi_action(zs, action, task)
+            pi_loss = (( - weights * log_pis_action + self.cfg.entropy_coef * log_pis).mean(dim=(1, 2)) * rho).mean()
+            q_loss = torch.zeros_like(pi_loss) # Not used
+            prior_loss = torch.zeros_like(pi_loss) # Not used
 
-        # Loss is a weighted sum of Q-values
-        # rho = torch.pow(self.cfg.rho, torch.arange(len(qs), device=self.device))
-        # pi_loss = ((self.cfg.entropy_coef * log_pis - qs).mean(dim=(1, 2)) * rho).mean()
+        elif self.cfg.actor_mode=="residual":
+            # Loss for residual learning
+            std = torch.max(std, 1e-5 * torch.ones_like(std))
+            eps = (pis - mu) / std
+            log_pis_prior = math.gaussian_logprob(eps, std.log(), size=pis.size(-1))
+            log_pis_prior = self.scale(log_pis_prior)
+            log_pis_prior = log_pis_prior.nan_to_num_(0)
 
-        rho = torch.pow(self.cfg.rho, torch.arange(len(qs), device=self.device))
-        adv = (qs - vs).detach()
-        weights = weights = torch.clamp(torch.exp(adv / self.cfg.awac_lambda), self.cfg.exp_adv_min, self.cfg.exp_adv_max)
-        log_pis_action = self.model.log_pi_action(zs, action, task)
-        pi_loss = (( - weights * log_pis_action + self.cfg.entropy_coef * log_pis).mean(dim=(1, 2)) * rho).mean()
+            q_loss = ((self.cfg.entropy_coef * log_pis - qs).mean(dim=(1, 2)) * rho).mean()
+            prior_loss = - (log_pis_prior.mean(dim=(1, 2)) * rho).mean()
+            pi_loss = q_loss + self.cfg.prior_coef * prior_loss
+
+        elif self.cfg.actor_mode=="bc":
+            # Loss for residual learning
+            if not torch.isnan(mu).any():
+                std = torch.max(std, 1e-5 * torch.ones_like(std))
+                eps = (pis - mu) / std
+                log_pis_prior = math.gaussian_logprob(eps, std.log(), size=pis.size(-1))
+                log_pis_prior = self.scale(log_pis_prior)
+            else:
+                #print("mu:", mu)#
+                log_pis_prior = torch.zeros_like(std)
+            pi_loss = - (log_pis_prior.mean(dim=(1, 2)) * rho).mean()
+            prior_loss = pi_loss.detach().clone()
+            q_loss = torch.zeros_like(pi_loss) # Not used
 
         pi_loss.backward()
         torch.nn.utils.clip_grad_norm_(
@@ -272,7 +314,7 @@ class TDMPC2:
         self.pi_optim.step()
         self.model.track_q_grad(True)
 
-        return pi_loss.item()
+        return pi_loss.item(), q_loss.item(), prior_loss.item()
 
     @torch.no_grad()
     def _td_target(self, next_z, reward, task):
@@ -305,7 +347,7 @@ class TDMPC2:
         Returns:
                 dict: Dictionary of training statistics.
         """
-        obs, action, reward, task = buffer.sample()
+        obs, action, mu, std, reward, task = buffer.sample() # mu and std are from Gaussian policy used for data collection
 
         # Compute targets
         with torch.no_grad():
@@ -365,7 +407,7 @@ class TDMPC2:
         self.optim.step()
 
         # Update policy
-        pi_loss = self.update_pi(_zs.detach(), action.detach(), task)
+        pi_loss, pi_loss_q, pi_loss_prior  = self.update_pi(_zs.detach(), action.detach(), mu.detach(), std.detach(), task)
 
         # Update target Q-functions
         self.model.soft_update_target_Q()
@@ -377,6 +419,8 @@ class TDMPC2:
             "reward_loss": float(reward_loss.mean().item()),
             "value_loss": float(value_loss.mean().item()),
             "pi_loss": pi_loss,
+            "pi_loss_q": pi_loss_q,
+            "pi_loss_prior": pi_loss_prior,
             "total_loss": float(total_loss.mean().item()),
             "grad_norm": float(grad_norm),
             "pi_scale": float(self.scale.value),

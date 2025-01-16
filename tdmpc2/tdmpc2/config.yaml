@@ -63,7 +63,7 @@ simnorm_dim: 8
 
 # logging
 wandb_project: humanoid-bench
-wandb_entity: robot-learning
+wandb_entity: albert-yw-lin
 wandb_silent: false
 disable_wandb: true
 save_csv: true

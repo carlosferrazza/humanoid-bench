@@ -15,7 +15,7 @@ class TorchModel(torch.nn.Module):
             x = torch.tensor(x, device=self.device)
         elif x.device != self.device:
             x = x.to(self.device)
-            
+
         x = torch.nn.functional.tanh(self.dense1(x))
         x = torch.nn.functional.tanh(self.dense2(x))
         x = self.dense3(x)
@@ -33,7 +33,7 @@ class TorchPolicy():
         if self.mean is not None and self.var is not None:
             obs = (obs - self.mean) / np.sqrt(self.var + 1e-8)
         obs = torch.from_numpy(obs).float()
-        action = self.model(obs).detach().numpy()
+        action = self.model(obs).detach().cpu().numpy()
         return action
 
     def get_weights(self):

@@ -25,18 +25,18 @@ print_color "36" "Activating humanoidbench environment..."
 conda activate humanoidbench
 
 # Change to correct working directory
-WORK_DIR="/viscam/u/ywlin/dp3-humanoidBench/humanoid-bench"
-if [ ! -d "$WORK_DIR" ]; then
-    print_color "31" "Error: Working directory $WORK_DIR does not exist!"
-    exit 1
-fi
-cd "$WORK_DIR"
-print_color "36" "Changed working directory to: $(pwd)"
+# WORK_DIR="/viscam/u/ywlin/dp3-humanoidBench/humanoid-bench"
+# if [ ! -d "$WORK_DIR" ]; then
+#     print_color "31" "Error: Working directory $WORK_DIR does not exist!"
+#     exit 1
+# fi
+# cd "$WORK_DIR"
+# print_color "36" "Changed working directory to: $(pwd)"
 
 # Set up environment variables
 print_color "36" "Setting up environment variables..."
-export MUJOCO_GL="egl"
-export BASE_DIR="$WORK_DIR"
+# export MUJOCO_GL="egl"
+export BASE_DIR="$(pwd)"
 export TASK="h1hand-push-v0"
 export POLICY_PATH="${BASE_DIR}/data/reach_one_hand/torch_model.pt"
 export MEAN_PATH="${BASE_DIR}/data/reach_one_hand/mean.npy"

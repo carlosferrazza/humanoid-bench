@@ -100,12 +100,13 @@ def evaluate(cfg: dict):
             task_idx = None
         ep_rewards, ep_successes = [], []
         for i in range(cfg.eval_episodes):
-            obs, done, ep_reward, t = env.reset(task_idx=task_idx), False, 0, 0
+            obs, done, ep_reward, t = env.reset(task_idx=task_idx)[0], False, 0, 0
             if cfg.save_video:
                 frames = [env.render()]
             while not done:
                 action = agent.act(obs, t0=t == 0, task=task_idx)
-                obs, reward, done, info = env.step(action)
+                obs, reward, done, truncated, info = env.step(action)
+                done = done or truncated
                 ep_reward += reward
                 t += 1
                 if cfg.save_video:

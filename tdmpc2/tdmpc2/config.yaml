@@ -7,7 +7,7 @@ obs: state
 
 # evaluation
 checkpoint: ???
-eval_episodes: 10
+eval_episodes: 1
 eval_freq: 50000
 
 # training
@@ -69,7 +69,7 @@ disable_wandb: true
 save_csv: true
 
 # misc
-save_video: true
+save_video: false
 save_agent: true
 seed: 0
 

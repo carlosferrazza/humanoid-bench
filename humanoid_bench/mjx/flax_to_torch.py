@@ -18,7 +18,8 @@ class TorchModel(torch.nn.Module):
 class TorchPolicy():
 
     def __init__(self, model):
-        self.model = model
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model = model.to(self.device)
         self.mean = None
         self.var = None
 
@@ -39,7 +40,7 @@ class TorchPolicy():
         torch.save(self.model.state_dict(), path)
 
     def load(self, path, mean=None, var=None):
-        self.model.load_state_dict(torch.load(path))
+        self.model.load_state_dict(torch.load(path, map_location=self.device))
         if mean is not None and var is not None:
             self.mean = np.load(mean)[0]
             self.var = np.load(var)[0]

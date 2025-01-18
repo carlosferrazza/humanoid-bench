@@ -44,7 +44,7 @@ def evaluate(cfg: dict):
             $ python evaluate.py task=dog-run checkpoint=/path/to/dog-1.pt save_video=true
     ```
     """
-    assert torch.cuda.is_available()
+    # assert torch.cuda.is_available()
     assert cfg.eval_episodes > 0, "Must evaluate at least 1 episode."
     cfg = parse_cfg(cfg)
     set_seed(cfg.seed)

@@ -7,7 +7,7 @@ obs: state
 
 # evaluation
 checkpoint: ???
-eval_episodes: 1
+eval_episodes: 10
 eval_freq: 50000
 
 # training
@@ -25,7 +25,7 @@ discount_denom: 5
 discount_min: 0.95
 discount_max: 0.995
 buffer_size: 3_000_000
-exp_name: default
+exp_name: tdmpc
 data_dir: ???
 
 # planning
@@ -50,7 +50,7 @@ vmin: -10
 vmax: +10
 
 # architecture
-model_size: ???
+model_size: 5
 num_enc_layers: 2
 enc_dim: 256
 num_channels: 32
@@ -71,7 +71,7 @@ save_csv: true
 # misc
 save_video: true
 save_agent: true
-seed: 1
+seed: 0
 
 # convenience
 work_dir: ???

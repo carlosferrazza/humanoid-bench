@@ -15,7 +15,7 @@ class TorchModel(torch.nn.Module):
             x = torch.tensor(x, device=self.device)
         elif x.device != self.device:
             x = x.to(self.device)
-            
+
         x = torch.nn.functional.tanh(self.dense1(x))
         x = torch.nn.functional.tanh(self.dense2(x))
         x = self.dense3(x)

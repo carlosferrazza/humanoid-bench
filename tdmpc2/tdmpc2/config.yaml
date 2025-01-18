@@ -69,7 +69,7 @@ disable_wandb: true
 save_csv: true
 
 # misc
-save_video: false
+save_video: true
 save_agent: true
 seed: 0
 

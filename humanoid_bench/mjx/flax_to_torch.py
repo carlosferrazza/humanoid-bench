@@ -5,11 +5,17 @@ import jax.numpy as jnp
 class TorchModel(torch.nn.Module):
     def __init__(self, inputs, num_classes=1):
         super(TorchModel, self).__init__()
-        self.dense1 = torch.nn.Linear(inputs, 256)
-        self.dense2 = torch.nn.Linear(256, 256)
-        self.dense3 = torch.nn.Linear(256, num_classes)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.dense1 = torch.nn.Linear(inputs, 256).to(self.device)
+        self.dense2 = torch.nn.Linear(256, 256).to(self.device)
+        self.dense3 = torch.nn.Linear(256, num_classes).to(self.device)
 
     def forward(self, x):
+        if not isinstance(x, torch.Tensor):
+            x = torch.tensor(x, device=self.device)
+        elif x.device != self.device:
+            x = x.to(self.device)
+            
         x = torch.nn.functional.tanh(self.dense1(x))
         x = torch.nn.functional.tanh(self.dense2(x))
         x = self.dense3(x)

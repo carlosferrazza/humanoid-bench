@@ -22,7 +22,8 @@ class Task:
         if env is None:
             return
 
-        self._env.viewer = self._env.mujoco_renderer._get_viewer(self._env.render_mode)
+        if self._env.render_mode is not None:
+            self._env.viewer = self._env.mujoco_renderer._get_viewer(self._env.render_mode)
 
     @property
     def observation_space(self):

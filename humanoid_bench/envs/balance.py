@@ -28,7 +28,6 @@ class BalanceBase(Task):
         )
 
     def get_reward(self):
-        print("self.robot.head_height():", self.robot.head_height())
         standing = rewards.tolerance(
             self.robot.head_height(),
             bounds=(_STAND_HEIGHT + 0.37, float("inf")),

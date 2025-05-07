@@ -88,7 +88,7 @@ class TDMPC2:
         Args:
                 fp (str or dict): Filepath or state dict to load.
         """
-        state_dict = fp if isinstance(fp, dict) else torch.load(fp)
+        state_dict = fp if isinstance(fp, dict) else torch.load(fp, map_location=self.device)
         self.model.load_state_dict(state_dict["model"])
 
     @torch.no_grad()

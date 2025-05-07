@@ -5,11 +5,17 @@ import jax.numpy as jnp
 class TorchModel(torch.nn.Module):
     def __init__(self, inputs, num_classes=1):
         super(TorchModel, self).__init__()
-        self.dense1 = torch.nn.Linear(inputs, 256)
-        self.dense2 = torch.nn.Linear(256, 256)
-        self.dense3 = torch.nn.Linear(256, num_classes)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.dense1 = torch.nn.Linear(inputs, 256).to(self.device)
+        self.dense2 = torch.nn.Linear(256, 256).to(self.device)
+        self.dense3 = torch.nn.Linear(256, num_classes).to(self.device)
 
     def forward(self, x):
+        if not isinstance(x, torch.Tensor):
+            x = torch.tensor(x, device=self.device)
+        elif x.device != self.device:
+            x = x.to(self.device)
+
         x = torch.nn.functional.tanh(self.dense1(x))
         x = torch.nn.functional.tanh(self.dense2(x))
         x = self.dense3(x)
@@ -18,7 +24,8 @@ class TorchModel(torch.nn.Module):
 class TorchPolicy():
 
     def __init__(self, model):
-        self.model = model
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model = model.to(self.device)
         self.mean = None
         self.var = None
 
@@ -26,7 +33,7 @@ class TorchPolicy():
         if self.mean is not None and self.var is not None:
             obs = (obs - self.mean) / np.sqrt(self.var + 1e-8)
         obs = torch.from_numpy(obs).float()
-        action = self.model(obs).detach().numpy()
+        action = self.model(obs).detach().cpu().numpy()
         return action
 
     def get_weights(self):
@@ -39,7 +46,7 @@ class TorchPolicy():
         torch.save(self.model.state_dict(), path)
 
     def load(self, path, mean=None, var=None):
-        self.model.load_state_dict(torch.load(path))
+        self.model.load_state_dict(torch.load(path, map_location=self.device))
         if mean is not None and var is not None:
             self.mean = np.load(mean)[0]
             self.var = np.load(var)[0]

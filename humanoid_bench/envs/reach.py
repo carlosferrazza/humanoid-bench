@@ -14,6 +14,7 @@ class Reach(Task):
         "h1": "0 0 0.98 1 0 0 0 0 0 -0.4 0.8 -0.4 0 0 -0.4 0.8 -0.4 0 0 0 0 0 0 0 0 0",
         "h1hand": "0 0 0.98 1 0 0 0 0 0 -0.4 0.8 -0.4 0 0 -0.4 0.8 -0.4 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0",
         "h1touch": "0 0 0.98 1 0 0 0 0 0 -0.4 0.8 -0.4 0 0 -0.4 0.8 -0.4 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0",
+        "g1": "0 0 0.75 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1.57 0 0 0 0 0 0 0 0 0 0 0 1.57 0 0 0 0 0 0 0"
     }
     htarget_low = np.array([-2.5, -2.5, 0.2])
     htarget_high = np.array([25, 2.5, 2.0])
@@ -35,7 +36,9 @@ class Reach(Task):
         self.target_high = np.array([2, 2, 2.0])
         self.goal = np.zeros(3)
 
-        self._env.viewer = self._env.mujoco_renderer._get_viewer(self._env.render_mode)
+        if robot.__class__.__name__ == "G1":
+            global _STAND_HEIGHT
+            _STAND_HEIGHT = 1.28
 
     @property
     def observation_space(self):

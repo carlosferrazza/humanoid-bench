@@ -142,7 +142,7 @@
         <geom class="visual" mesh="torso_link"/>
         <site name="head" class="visual" size="0.01" pos="0 0 0.7" rgba="1 1 1 1"/>
         <geom class="visual" material="white" mesh="logo_link"/>
-        <site name="imu" size="0.01" pos="-0.04452 -0.01891 0.27756"/>
+        <site name="imu" size="0.01" pos="-0.04452 0.0 0.27756"/>
         <body name="left_shoulder_pitch_link" pos="0.0055 0.15535 0.42999" quat="0.976296 0.216438 0 0">
           <inertial pos="0.005045 0.053657 -0.015715" quat="0.814858 0.579236 -0.0201072 -0.00936488" mass="1.033"
             diaginertia="0.00129936 0.000987113 0.000858198"/>

@@ -22,6 +22,18 @@ class Spoon(Task):
             0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
             0.75 0.2 0.9 1 0 0 0
         """,
+        "g1": """
+            0 0 0.75
+            1 0 0 0
+            0 0 0 0 0 0
+            0 0 0 0 0 0
+            0
+            0 0 0 0 -1.57
+            0 0 0 0 0 0 0
+            0 0 0 0 1.57
+            0 0 0 0 0 0 0
+            0.75 0.2 0.9 1 0 0 0
+        """
     }
     dof = 7
     frame_skip = 10
@@ -31,6 +43,9 @@ class Spoon(Task):
     def __init__(self, robot=None, env=None, **kwargs):
         super().__init__(robot, env, **kwargs)
         self.step_counter = 0
+        if robot.__class__.__name__ == "G1":
+            global _STAND_HEIGHT
+            _STAND_HEIGHT = 1.28
 
     @property
     def observation_space(self):

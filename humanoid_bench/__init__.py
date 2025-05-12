@@ -3,7 +3,10 @@ from gymnasium.envs import register
 from .env import ROBOTS, TASKS
 
 for robot in ROBOTS:
-    control = "pos"
+    if robot == "g1" or robot == "digit":
+        control = "torque"
+    else:
+        control = "pos"
     for task, task_info in TASKS.items():
         task_info = task_info()
         kwargs = task_info.kwargs.copy()

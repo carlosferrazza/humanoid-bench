@@ -6,4 +6,16 @@
     <include file="../common/floor.xml"/>
     <include file="../robots/h1touch_pos.xml"/>
     <include file="../tasks/cabinet.xml"/>
+    <keyframe>
+        <key name="qpos0" qpos="
+            0 0 0.98 1 0 0 0 0 0 -0.4 0.8 -0.4 0 0 -0.4 0.8 -0.4 0 0 0 0 0 0 0 0 0
+            0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+            0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+            0 0 0 0 0
+            0.9 0 0.58 1 0 0 0
+            0.9 0 0.87 1 0 0 0
+            0.9 0 1.16 1 0 0 0
+            0.9 0 1.45 1 0 0 0
+        "/>
+    </keyframe>
 </mujoco>

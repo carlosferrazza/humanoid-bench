@@ -17,11 +17,12 @@ core_requirements = [
     "brax==0.9.4",
     "torch==2.3.1",
     "opencv-python==4.10.0.84",
+    "natsort==8.4.0",
 ]
 
 setup(
     name="humanoid_bench",
-    version="0.1",
+    version="0.2",
     author="RLL at UC Berkeley",
     url="https://github.com/carlosferrazza/humanoid-bench",
     description="Humanoid Benchmark",

@@ -30,12 +30,28 @@ class Door(Task):
             0
             0
         """,
+        "g1": """
+            0 0 0.75
+            1 0 0 0
+            0 0 0 0 0 0
+            0 0 0 0 0 0
+            0
+            0 0 0 0 -1.57
+            0 0 0 0 0 0 0
+            0 0 0 0 1.57
+            0 0 0 0 0 0 0
+            0
+            0
+        """
     }
     dof = 2
     success_bar = 600
 
     def __init__(self, robot=None, env=None, **kwargs):
         super().__init__(robot, env, **kwargs)
+        if robot.__class__.__name__ == "G1":
+            global _STAND_HEIGHT
+            _STAND_HEIGHT = 1.28
 
     @property
     def observation_space(self):

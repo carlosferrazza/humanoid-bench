@@ -58,7 +58,7 @@ class EvalCallback(BaseCallback):
         super(EvalCallback, self).__init__(verbose=verbose)
 
         self.eval_every = eval_every
-        self.eval_env = DummyVecEnv([make_env(ARGS.num_envs)])
+        self.eval_env = DummyVecEnv([make_env(1)])
 
     def _on_step(self) -> bool:
         

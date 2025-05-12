@@ -4,7 +4,6 @@ from gymnasium.spaces import Box
 from dm_control.utils import rewards
 import mujoco
 
-
 class Task:
     qpos0_robot = {}
     dof = 0
@@ -17,6 +16,14 @@ class Task:
         self.robot = robot
         if env:
             self._env = env
+
+        self.unwrapped = self
+
+        if env is None:
+            return
+
+        if self._env.render_mode is not None:
+            self._env.viewer = self._env.mujoco_renderer._get_viewer(self._env.render_mode)
 
     @property
     def observation_space(self):

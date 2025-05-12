@@ -42,6 +42,9 @@ pip install -r requirements_dreamer.txt
 
 # Install td-mpc2
 pip install -r requirements_tdmpc.txt
+
+# Install stable-baselines3 (PPO)
+pip install stable-baselines3==2.3.2
 ```
 
 

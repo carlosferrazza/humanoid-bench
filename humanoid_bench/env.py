@@ -118,11 +118,19 @@ class HumanoidEnv(MujocoEnv, gym.utils.EzPickle):
         gym.utils.EzPickle.__init__(self, metadata=self.metadata)
 
         asset_path = os.path.join(os.path.dirname(__file__), "assets")
-        model_path = f"envs/{robot}_{control}_{task}.xml"
+
+        if "model_path" in kwargs:
+            model_path = kwargs["model_path"]
+        else:
+            model_path = f"envs/{robot}_{control}_{task}.xml"
+        
         model_path = os.path.join(asset_path, model_path)
 
         self.robot = ROBOTS[robot](self)
-        task_info = TASKS[task](self.robot, None, **kwargs)
+        if isinstance(task, str):
+            task_info = TASKS[task](self.robot, None, **kwargs)
+        else:
+            task_info = task(self.robot, None, **kwargs)
 
         self.obs_wrapper = kwargs.get("obs_wrapper", None)
         if self.obs_wrapper is not None:
@@ -148,7 +156,10 @@ class HumanoidEnv(MujocoEnv, gym.utils.EzPickle):
             low=-1, high=1, shape=self.action_space.shape, dtype=np.float32
         )
 
-        self.task = TASKS[task](self.robot, self, **kwargs)
+        if isinstance(task, str):
+            self.task = TASKS[task](self.robot, self, **kwargs)
+        else:
+            self.task = task(self.robot, self, **kwargs)
 
         # Wrap for hierarchical control
         if (

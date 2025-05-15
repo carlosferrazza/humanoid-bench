@@ -3,3 +3,6 @@ ml_collections==0.1.1
 flax==0.8.5
 distrax==0.1.5
 tf_keras==2.16.0
+
+
+#pip uninstall -y jax jaxlib jaxopt jaxrl_m jax-cuda12-plugin jax-cuda12-pjrt

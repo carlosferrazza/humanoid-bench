@@ -1,0 +1,7 @@
+conda create -n humanoidbench python=3.11
+conda activate humanoidbench
+pip install -e .
+pip install "jax[cuda12]==0.4.28"
+pip install -r requirements_jaxrl.txt
+pip install -r requirements_dreamer.txt
+pip install -r requirements_tdmpc.txt

@@ -6,11 +6,14 @@ import gymnasium as gym
 from gymnasium.envs import register
 from gymnasium.envs.mujoco import MujocoEnv
 from gymnasium.spaces import Box
-from dm_control.mujoco import index
-from dm_control.mujoco.engine import NamedIndexStructs
+import humanoid_bench.dmc_deps.dmc_index as index
+import collections
+NamedIndexStructs = collections.namedtuple(
+    'NamedIndexStructs', ['model', 'data'])
+
 from dm_control.utils import rewards
 
-from humanoid_bench.dmc_wrapper import MjDataWrapper, MjModelWrapper
+from humanoid_bench.dmc_deps.dmc_wrapper import MjDataWrapper, MjModelWrapper
 
 from .wrappers import (
     SingleReachWrapper,
@@ -203,8 +206,8 @@ class HumanoidEnv(MujocoEnv, gym.utils.EzPickle):
         self.randomness = randomness
         if isinstance(self.task, (BookshelfHard, BookshelfSimple, Kitchen, Cube)):
             self.randomness = 0
-        print(isinstance(self.task, (BookshelfHard, BookshelfSimple, Kitchen, Cube)))
-
+            print("No randomness in this env. This is the default behavior for (BookshelfHard, BookshelfSimple, Kitchen, Cube)")
+        
         # Set up named indexing.
         data = MjDataWrapper(self.data)
         model = MjModelWrapper(self.model)

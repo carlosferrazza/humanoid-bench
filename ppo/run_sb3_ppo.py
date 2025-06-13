@@ -25,7 +25,7 @@ parser.add_argument("--seed", type=int)
 parser.add_argument("--num_envs", default=4, type=int)
 parser.add_argument("--learning_rate", default=3e-5, type=float)
 parser.add_argument("--max_steps", default=20000000, type=int)
-parser.add_argument("--wandb_entity", default="robot-learning", type=str)
+parser.add_argument("--wandb_entity", default="thuaduc24042001-technical-university-of-munich", type=str)
 ARGS = parser.parse_args()
 
 

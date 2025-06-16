@@ -39,14 +39,17 @@ class DistributionalQNetwork(nn.Module):
         actions: torch.Tensor,
         rewards: torch.Tensor,
         bootstrap: torch.Tensor,
-        gamma: float,
+        discount: float,
         q_support: torch.Tensor,
         device: torch.device,
     ) -> torch.Tensor:
         delta_z = (self.v_max - self.v_min) / (self.num_atoms - 1)
         batch_size = rewards.shape[0]
 
-        target_z = rewards.unsqueeze(1) + bootstrap.unsqueeze(1) * gamma * q_support
+        target_z = (
+            rewards.unsqueeze(1)
+            + bootstrap.unsqueeze(1) * discount * q_support
+        )
         target_z = target_z.clamp(self.v_min, self.v_max)
         b = (target_z - self.v_min) / delta_z
         l = torch.floor(b).long()
@@ -121,7 +124,7 @@ class Critic(nn.Module):
         actions: torch.Tensor,
         rewards: torch.Tensor,
         bootstrap: torch.Tensor,
-        gamma: float,
+        discount: float,
     ) -> torch.Tensor:
         """Projection operation that includes q_support directly"""
         q1_proj = self.qnet1.projection(
@@ -129,7 +132,7 @@ class Critic(nn.Module):
             actions,
             rewards,
             bootstrap,
-            gamma,
+            discount,
             self.q_support,
             self.q_support.device,
         )
@@ -138,7 +141,7 @@ class Critic(nn.Module):
             actions,
             rewards,
             bootstrap,
-            gamma,
+            discount,
             self.q_support,
             self.q_support.device,
         )
@@ -210,6 +213,89 @@ class Actor(nn.Module):
             self.noise_scales = torch.where(dones_view, new_scales, self.noise_scales)
 
         act = self(obs)
+        if deterministic:
+            return act
+
+        noise = torch.randn_like(act) * self.noise_scales
+        return act + noise
+
+
+from fast_td3.egnn_clean import EGNN, build_egnn_input, build_batched_egnn_input
+from fast_td3.environments.physics_data import PhysicsData
+
+class ActorGNN(nn.Module):
+    def __init__(
+        self,
+        n_obs: int,
+        n_act: int, 
+        num_envs: int,
+        init_scale: float,
+        hidden_dim: int,
+        std_min: float = 0.05,
+        std_max: float = 0.8,
+        device: torch.device = None,
+        n_nodes: int = 19, # Number of nodes in the graph (e.g., humanoid joints)
+        n_node_feat: int = 19, # Node feature dimension
+        n_edge_feat: int = 19 # Edge feature dimension
+    ):
+        super().__init__()
+        self.n_act = n_act
+        self.n_envs = num_envs
+        self.n_nodes = n_nodes
+
+        # EGNN for message passing
+        self.egnn = EGNN(
+            in_node_nf=1,
+            hidden_nf=hidden_dim,
+            out_node_nf=1,
+            in_edge_nf=0,
+            device=device
+        )
+
+        # MLP head for output
+        self.fc_mu = nn.Sequential(
+            nn.Linear(1, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, 1)
+        ).to(device)
+        nn.init.normal_(self.fc_mu[0].weight, 0.0, init_scale)
+        nn.init.constant_(self.fc_mu[0].bias, 0.0)
+
+        # Initialize noise parameters
+        noise_scales = (
+            torch.rand(num_envs, 1, device=device) * (std_max - std_min) + std_min
+        )
+        self.register_buffer("noise_scales", noise_scales)
+        self.register_buffer("std_min", torch.as_tensor(std_min, device=device))
+        self.register_buffer("std_max", torch.as_tensor(std_max, device=device))
+
+    def forward(self, physics_data, device) -> torch.Tensor:
+        # Process physics data through EGNN
+        h, x, edges, edge_attr = build_batched_egnn_input(19, physics_data, device)
+
+        # Apply EGNN
+        h, x = self.egnn(h, x, edges, edge_attr)
+        h = h.view(self.n_envs, self.n_nodes, 1)  # [batch, n_nodes, 1]
+        h = h.mean(dim=1)
+        return self.fc_mu(h)
+
+    def explore(
+        self, physics_data: PhysicsData, device: torch.device, dones: torch.Tensor = None, deterministic: bool = False
+    ) -> torch.Tensor:
+        # If dones is provided, resample noise for environments that are done
+        if dones is not None and dones.sum() > 0:
+            # Generate new noise scales for done environments (one per environment)
+            new_scales = (
+                torch.rand(self.n_envs, 1, device=physics_data.device)
+                * (self.std_max - self.std_min)
+                + self.std_min
+            )
+
+            # Update only the noise scales for environments that are done
+            dones_view = dones.view(-1, 1) > 0
+            self.noise_scales = torch.where(dones_view, new_scales, self.noise_scales)
+
+        act = self(physics_data, device)
         if deterministic:
             return act
 

@@ -4,7 +4,7 @@ import gymnasium as gym
 
 import humanoid_bench
 from gymnasium.wrappers import TimeLimit
-from stable_baselines3.common.vec_env import SubprocVecEnv
+from fast_td3.environments.subproc_vec_env import SubprocVecEnv
 import numpy as np
 import torch
 from loguru import logger as log
@@ -83,11 +83,12 @@ class HumanoidBenchEnv:
 
     def reset(self):
         """Reset the environment."""
-        observations = self.envs.reset()
+        observations , physics_data = self.envs.reset()
         observations = torch.from_numpy(observations).to(
             device=self.sim_device, dtype=torch.float
         )
-        return observations
+
+        return observations, physics_data
 
     def render(self):
         assert (
@@ -99,7 +100,7 @@ class HumanoidBenchEnv:
         assert isinstance(actions, torch.Tensor)
         actions = actions.cpu().numpy()
 
-        observations, rewards, dones, raw_infos = self.envs.step(actions)
+        observations, rewards, dones, raw_infos, physics_data = self.envs.step(actions)
 
         # This will be used for getting 'true' next observations
         infos = dict()
@@ -125,4 +126,4 @@ class HumanoidBenchEnv:
         ).to(device=self.sim_device, dtype=torch.float)
         infos["time_outs"] = truncateds
 
-        return observations, rewards, dones, infos
+        return observations, rewards, dones, infos, physics_data

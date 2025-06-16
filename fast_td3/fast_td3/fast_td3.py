@@ -194,6 +194,7 @@ class Actor(nn.Module):
         x = obs
         x = self.net(x)
         action = self.fc_mu(x)
+        print(f"Action shape: {action.shape}, Noise scales shape: {self.noise_scales.shape}")
         return action
 
     def explore(
@@ -220,7 +221,7 @@ class Actor(nn.Module):
         return act + noise
 
 
-from fast_td3.egnn_clean import EGNN, build_egnn_input, build_batched_egnn_input
+from fast_td3.egnn_clean import EGNN, build_batched_egnn_input
 from fast_td3.environments.physics_data import PhysicsData
 
 class ActorGNN(nn.Module):
@@ -269,24 +270,22 @@ class ActorGNN(nn.Module):
         self.register_buffer("std_min", torch.as_tensor(std_min, device=device))
         self.register_buffer("std_max", torch.as_tensor(std_max, device=device))
 
-    def forward(self, physics_data, device) -> torch.Tensor:
+    def forward(self, obs, xpos) -> torch.Tensor:
         # Process physics data through EGNN
-        h, x, edges, edge_attr = build_batched_egnn_input(19, physics_data, device)
+        h, x, edges, edge_attr = build_batched_egnn_input(obs, xpos)
 
         # Apply EGNN
-        h, x = self.egnn(h, x, edges, edge_attr)
-        h = h.view(self.n_envs, self.n_nodes, 1)  # [batch, n_nodes, 1]
-        h = h.mean(dim=1)
-        return self.fc_mu(h)
+        return self.egnn(h, x, edges, edge_attr)
+        
 
     def explore(
-        self, physics_data: PhysicsData, device: torch.device, dones: torch.Tensor = None, deterministic: bool = False
+        self, obs: torch.Tensor, xpos: torch.Tensor, dones: torch.Tensor = None, deterministic: bool = False
     ) -> torch.Tensor:
         # If dones is provided, resample noise for environments that are done
         if dones is not None and dones.sum() > 0:
             # Generate new noise scales for done environments (one per environment)
             new_scales = (
-                torch.rand(self.n_envs, 1, device=physics_data.device)
+                torch.rand(self.n_envs, 1, device=obs.device)
                 * (self.std_max - self.std_min)
                 + self.std_min
             )
@@ -295,7 +294,7 @@ class ActorGNN(nn.Module):
             dones_view = dones.view(-1, 1) > 0
             self.noise_scales = torch.where(dones_view, new_scales, self.noise_scales)
 
-        act = self(physics_data, device)
+        act = self(obs, xpos)
         if deterministic:
             return act
 

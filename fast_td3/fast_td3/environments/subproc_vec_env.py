@@ -38,27 +38,27 @@ def _worker(  # noqa: C901
                 done = terminated or truncated
                 info["TimeLimit.truncated"] = truncated and not terminated
 
-                physics_data = PhysicsData(
-                    xpos=env.unwrapped.named.data.xpos.copy(),
-                    qpos=env.unwrapped.named.data.qpos.copy(),
-                    qvel=env.unwrapped.named.data.qvel.copy()
-                )
+                # physics_data = PhysicsData(
+                #     xpos=env.unwrapped.named.data.xpos.copy(),
+                #     qpos=env.unwrapped.named.data.qpos.copy(),
+                #     qvel=env.unwrapped.named.data.qvel.copy()
+                # )
 
                 if done:
                     # save final observation where user can get it, then reset
                     info["terminal_observation"] = observation
                     observation, reset_info = env.reset()
-                remote.send((observation, reward, done, info, reset_info, physics_data))
+                remote.send((observation, reward, done, info, reset_info, env.unwrapped.named.data.xpos.copy()))
             elif cmd == "reset":
                 maybe_options = {"options": data[1]} if data[1] else {}
                 observation, reset_info = env.reset(seed=data[0], **maybe_options)
-                physics_data = PhysicsData(
-                    xpos=env.unwrapped.named.data.xpos.copy(),
-                    qpos=env.unwrapped.named.data.qpos.copy(),
-                    qvel=env.unwrapped.named.data.qvel.copy()
-                )
+                # physics_data = PhysicsData(
+                #     xpos=env.unwrapped.named.data.xpos.copy(),
+                #     qpos=env.unwrapped.named.data.qpos.copy(),
+                #     qvel=env.unwrapped.named.data.qvel.copy()
+                # )
 
-                remote.send((observation, reset_info, physics_data))
+                remote.send((observation, reset_info, env.unwrapped.named.data.xpos.copy()))
             elif cmd == "render":
                 remote.send(env.render())
             elif cmd == "close":
@@ -143,7 +143,7 @@ class SubprocVecEnv(VecEnv):
         super().__init__(len(env_fns), observation_space, action_space)
         
         # Initialize physics data storage
-        self.physics_data = None
+        self.xpos = None
 
     def step_async(self, actions: np.ndarray) -> None:
         for remote, action in zip(self.remotes, actions):
@@ -153,18 +153,18 @@ class SubprocVecEnv(VecEnv):
     def step_wait(self) -> VecEnvStepReturn:
         results = [remote.recv() for remote in self.remotes]
         self.waiting = False
-        obs, rews, dones, infos, self.reset_infos, self.physics_data = zip(*results)  # type: ignore[assignment]
-        return _stack_obs(obs, self.observation_space), np.stack(rews), np.stack(dones), infos, self.physics_data  # type: ignore[return-value]
+        obs, rews, dones, infos, self.reset_infos, self.xpos = zip(*results)  # type: ignore[assignment]
+        return _stack_obs(obs, self.observation_space), np.stack(rews), np.stack(dones), infos, np.stack(self.xpos)  # type: ignore[return-value]
 
-    def reset(self) -> Union[np.ndarray, dict[str, np.ndarray], tuple[np.ndarray, ...], PhysicsData]:
+    def reset(self) -> Union[np.ndarray, dict[str, np.ndarray], tuple[np.ndarray, ...], np.ndarray]:
         for env_idx, remote in enumerate(self.remotes):
             remote.send(("reset", (self._seeds[env_idx], self._options[env_idx])))
         results = [remote.recv() for remote in self.remotes]
-        obs, self.reset_infos, physics_data = zip(*results)  # type: ignore[assignment]
+        obs, self.reset_infos, xpos = zip(*results)  # type: ignore[assignment]
         # Seeds and options are only used once
         self._reset_seeds()
         self._reset_options()
-        return _stack_obs(obs, self.observation_space), physics_data
+        return _stack_obs(obs, self.observation_space), np.stack(xpos)
 
     def close(self) -> None:
         if self.closed:
@@ -237,13 +237,13 @@ class SubprocVecEnv(VecEnv):
         indices = self._get_indices(indices)
         return [self.remotes[i] for i in indices]
 
-    def get_physics_data(self) -> Optional[tuple]:
-        """
-        Get the physics data (xpos, qpos, qvel) from the last step.
+    # def get_physics_data(self) -> Optional[tuple]:
+    #     """
+    #     Get the physics data (xpos, qpos, qvel) from the last step.
         
-        :return: Tuple of physics data from all environments, or None if not available.
-        """
-        return self.physics_data
+    #     :return: Tuple of physics data from all environments, or None if not available.
+    #     """
+    #     return self.physics_data
 
 
 def _stack_obs(obs_list: Union[list[VecEnvObs], tuple[VecEnvObs]], space: spaces.Space) -> VecEnvObs:

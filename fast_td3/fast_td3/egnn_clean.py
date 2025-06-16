@@ -1,7 +1,6 @@
 from torch import nn
 import torch
 import numpy as np
-from fast_td3.environments.physics_data import PhysicsData
 
 class E_GCL(nn.Module):
     """
@@ -131,8 +130,8 @@ class EGNN(nn.Module):
         self.hidden_nf = hidden_nf
         self.device = device
         self.n_layers = n_layers
-        self.embedding_in = nn.Linear(in_node_nf, self.hidden_nf)
-        self.embedding_out = nn.Linear(self.hidden_nf, out_node_nf)
+        self.embedding_in = nn.Linear(in_node_nf, self.hidden_nf, device=device)
+        self.embedding_out = nn.Linear(self.hidden_nf, out_node_nf, device=device)
         for i in range(0, n_layers):
             self.add_module("gcl_%d" % i, E_GCL(self.hidden_nf, self.hidden_nf, self.hidden_nf, edges_in_d=in_edge_nf,
                                                 act_fn=act_fn, residual=residual, attention=attention,
@@ -140,11 +139,16 @@ class EGNN(nn.Module):
         self.to(self.device)
 
     def forward(self, h, x, edges, edge_attr):
+        batch_size = int(h.shape[0] / ( 19))
+        
         h = self.embedding_in(h)
         for i in range(0, self.n_layers):
             h, x, _ = self._modules["gcl_%d" % i](h, edges, x, edge_attr=edge_attr)
         h = self.embedding_out(h)
-        return h, x
+
+        h = h.view(batch_size, 19)
+
+        return h
 
 
 def unsorted_segment_sum(data, segment_ids, num_segments):
@@ -192,75 +196,7 @@ def get_edges_batch(n_nodes, batch_size):
     return edges, edge_attr
 
 
-def build_egnn_input(dof, physics_data):
-    
-    # Process each physics data instance to extract joint positions and velocities
-    qpos = physics_data.qpos
-    qvel = physics_data.qvel
-    xpos = physics_data.xpos
-
-    h = qvel[6:]
-    x = qpos[7:]
-
-    joint_names = [
-    "left_hip_yaw", "left_hip_roll", "left_hip_pitch", "left_knee", "left_ankle",
-    "right_hip_yaw", "right_hip_roll", "right_hip_pitch", "right_knee", "right_ankle",
-    "torso",
-    "left_shoulder_pitch", "left_shoulder_roll", "left_shoulder_yaw", "left_elbow",
-    "right_shoulder_pitch", "right_shoulder_roll", "right_shoulder_yaw", "right_elbow",
-    ]
-
-    # Joint index mapping
-    joint_idx = {name: idx for idx, name in enumerate(joint_names)}
-
-    edge_list = [
-        # Left leg
-        (joint_idx["left_hip_yaw"], joint_idx["left_hip_roll"]),
-        (joint_idx["left_hip_roll"], joint_idx["left_hip_pitch"]),
-        (joint_idx["left_hip_pitch"], joint_idx["left_knee"]),
-        (joint_idx["left_knee"], joint_idx["left_ankle"]),
-
-        # Right leg
-        (joint_idx["right_hip_yaw"], joint_idx["right_hip_roll"]),
-        (joint_idx["right_hip_roll"], joint_idx["right_hip_pitch"]),
-        (joint_idx["right_hip_pitch"], joint_idx["right_knee"]),
-        (joint_idx["right_knee"], joint_idx["right_ankle"]),
-
-        # Torso
-        (joint_idx["torso"], joint_idx["left_hip_yaw"]),
-        (joint_idx["torso"], joint_idx["right_hip_yaw"]),
-
-        # Left arm
-        (joint_idx["torso"], joint_idx["left_shoulder_pitch"]),
-        (joint_idx["left_shoulder_pitch"], joint_idx["left_shoulder_roll"]),
-        (joint_idx["left_shoulder_roll"], joint_idx["left_shoulder_yaw"]),
-        (joint_idx["left_shoulder_yaw"], joint_idx["left_elbow"]),
-
-        # Right arm
-        (joint_idx["torso"], joint_idx["right_shoulder_pitch"]),
-        (joint_idx["right_shoulder_pitch"], joint_idx["right_shoulder_roll"]),
-        (joint_idx["right_shoulder_roll"], joint_idx["right_shoulder_yaw"]),
-        (joint_idx["right_shoulder_yaw"], joint_idx["right_elbow"]),
-    ]
-
-    edge_index = torch.tensor(edge_list, dtype=int).T  # (2, E)
-
-    joint_positions = []
-    for i in range(len(joint_names)):
-        pos = xpos[i]  # shape (3,)
-        joint_positions.append(pos.clone().detach())  # Clone to ensure no in-place modifications
-
-    joint_positions = torch.stack(joint_positions)  # shape: (19, 3)
-
-    # Now compute edge-wise Euclidean distances
-    src, dst = edge_index
-    edge_attr = torch.norm(joint_positions[src] - joint_positions[dst], dim=1, keepdim=True)  # shape (E, 1)
-
-
-    return h, x, edge_index, edge_attr
-
-
-def build_batched_egnn_input(dof, physics_data_batch, device):
+def build_batched_egnn_input(obs, xpos):
 
     joint_names = [
         "left_hip_yaw", "left_hip_roll", "left_hip_pitch", "left_knee", "left_ankle",
@@ -269,10 +205,7 @@ def build_batched_egnn_input(dof, physics_data_batch, device):
         "left_shoulder_pitch", "left_shoulder_roll", "left_shoulder_yaw", "left_elbow",
         "right_shoulder_pitch", "right_shoulder_roll", "right_shoulder_yaw", "right_elbow",
     ]
-
     joint_idx = {name: idx for idx, name in enumerate(joint_names)}
-    num_joints = len(joint_names)
-
     edge_list = [
         # Left leg
         (joint_idx["left_hip_yaw"], joint_idx["left_hip_roll"]),
@@ -302,55 +235,36 @@ def build_batched_egnn_input(dof, physics_data_batch, device):
         (joint_idx["right_shoulder_roll"], joint_idx["right_shoulder_yaw"]),
         (joint_idx["right_shoulder_yaw"], joint_idx["right_elbow"]),
     ]
+    
     src, dst = zip(*edge_list)
-    src = torch.tensor(src, device=device)
-    dst = torch.tensor(dst, device=device)
-
-    h_list, x_list, edge_attr_list = [], [], []
-
-    for _, physics_data in enumerate(physics_data_batch):
-        qvel = physics_data.qvel
-        qpos = physics_data.qpos
-        xpos = physics_data.xpos
-
-        indices = [
-            2,  # left_hip_yaw_link
-            3,  # left_hip_roll_link
-            4,  # left_hip_pitch_link
-            5,  # left_knee_link
-            6,  # left_ankle_link
-            7,  # right_hip_yaw_link
-            8,  # right_hip_roll_link
-            9,  # right_hip_pitch_link
-            10,  # right_knee_link
-            11,  # right_ankle_link
-            12,  # torso_link
-            13,  # left_shoulder_pitch_link
-            14,  # left_shoulder_roll_link
-            15,  # left_shoulder_yaw_link
-            16,  # left_elbow_link
-            18,  # right_shoulder_pitch_link
-            19,  # right_shoulder_roll_link
-            20,  # right_shoulder_yaw_link
-            21   # right_elbow_link
-        ]
-        xpos = xpos[indices]
-        joint_positions = torch.from_numpy(xpos).clone().detach().to(device).to(torch.float32)
-
-        h = torch.from_numpy(qvel[6:]).clone().detach().to(device).to(torch.float32)  # (DOF - 6,)
-        x = torch.from_numpy(qpos[7:]).clone().detach().to(device).to(torch.float32)  # (DOF - 7,)
-
-        h_list.append(h.unsqueeze(0))  # shape (1, N)
-        x_list.append(joint_positions)  # (N, 3)
-
-        # diff = joint_positions[src] - joint_positions[dst]
-        # edge_attr = torch.norm(diff, dim=1, keepdim=True)
-        # edge_attr_list.append(edge_attr)
-
-    h = torch.cat(h_list, dim=0).reshape(-1, 1)  # (B * N, F)
-    x = torch.cat(x_list, dim=0)  # (B * N, 3)
+    src = torch.tensor(src, device=obs.device)
+    dst = torch.tensor(dst, device=obs.device)
     edge_index = [src, dst]
-    #edge_attr = torch.cat(edge_attr_list, dim=0)  # (B * E, 1)
+
+    xpos_indices = [
+        2,  # left_hip_yaw_link
+        3,  # left_hip_roll_link
+        4,  # left_hip_pitch_link
+        5,  # left_knee_link
+        6,  # left_ankle_link
+        7,  # right_hip_yaw_link
+        8,  # right_hip_roll_link
+        9,  # right_hip_pitch_link
+        10,  # right_knee_link
+        11,  # right_ankle_link
+        12,  # torso_link
+        13,  # left_shoulder_pitch_link
+        14,  # left_shoulder_roll_link
+        15,  # left_shoulder_yaw_link
+        16,  # left_elbow_link
+        18,  # right_shoulder_pitch_link
+        19,  # right_shoulder_roll_link
+        20,  # right_shoulder_yaw_link
+        21   # right_elbow_link
+    ]
+    x = xpos[:, xpos_indices].reshape(-1, 3)  # (B*N, 3)
+
+    h = obs[:, 7:26].reshape(-1,1)  # (B*N, 1)
 
     return h, x, edge_index, None
 

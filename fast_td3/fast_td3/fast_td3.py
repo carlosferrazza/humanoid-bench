@@ -194,7 +194,6 @@ class Actor(nn.Module):
         x = obs
         x = self.net(x)
         action = self.fc_mu(x)
-        print(f"Action shape: {action.shape}, Noise scales shape: {self.noise_scales.shape}")
         return action
 
     def explore(
@@ -221,8 +220,8 @@ class Actor(nn.Module):
         return act + noise
 
 
-from fast_td3.egnn_clean import EGNN, build_batched_egnn_input
-from fast_td3.environments.physics_data import PhysicsData
+from fast_td3.egnn_clean import EGNN
+
 
 class ActorGNN(nn.Module):
     def __init__(
@@ -232,12 +231,13 @@ class ActorGNN(nn.Module):
         num_envs: int,
         init_scale: float,
         hidden_dim: int,
+        batch_size: int,
+        device: torch.device,
         std_min: float = 0.05,
         std_max: float = 0.8,
-        device: torch.device = None,
-        n_nodes: int = 19, # Number of nodes in the graph (e.g., humanoid joints)
-        n_node_feat: int = 19, # Node feature dimension
-        n_edge_feat: int = 19 # Edge feature dimension
+        n_nodes: int = 19,
+        n_node_feat: int = 1,
+        n_edge_feat: int = 1,
     ):
         super().__init__()
         self.n_act = n_act
@@ -246,21 +246,13 @@ class ActorGNN(nn.Module):
 
         # EGNN for message passing
         self.egnn = EGNN(
-            in_node_nf=1,
+            in_node_nf=n_node_feat,
             hidden_nf=hidden_dim,
             out_node_nf=1,
             in_edge_nf=0,
+            batch_size=batch_size,
             device=device
         )
-
-        # MLP head for output
-        self.fc_mu = nn.Sequential(
-            nn.Linear(1, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, 1)
-        ).to(device)
-        nn.init.normal_(self.fc_mu[0].weight, 0.0, init_scale)
-        nn.init.constant_(self.fc_mu[0].bias, 0.0)
 
         # Initialize noise parameters
         noise_scales = (
@@ -271,12 +263,9 @@ class ActorGNN(nn.Module):
         self.register_buffer("std_max", torch.as_tensor(std_max, device=device))
 
     def forward(self, obs, xpos) -> torch.Tensor:
-        # Process physics data through EGNN
-        h, x, edges, edge_attr = build_batched_egnn_input(obs, xpos)
+        h, x, edges, _ = self.egnn.build_batched_egnn_input(obs, xpos)
 
-        # Apply EGNN
-        return self.egnn(h, x, edges, edge_attr)
-        
+        return self.egnn(h, x, edges, None)       
 
     def explore(
         self, obs: torch.Tensor, xpos: torch.Tensor, dones: torch.Tensor = None, deterministic: bool = False

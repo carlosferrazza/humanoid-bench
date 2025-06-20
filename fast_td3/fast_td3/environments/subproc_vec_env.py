@@ -37,13 +37,6 @@ def _worker(  # noqa: C901
                 # convert to SB3 VecEnv api
                 done = terminated or truncated
                 info["TimeLimit.truncated"] = truncated and not terminated
-
-                # physics_data = PhysicsData(
-                #     xpos=env.unwrapped.named.data.xpos.copy(),
-                #     qpos=env.unwrapped.named.data.qpos.copy(),
-                #     qvel=env.unwrapped.named.data.qvel.copy()
-                # )
-
                 if done:
                     # save final observation where user can get it, then reset
                     info["terminal_observation"] = observation
@@ -52,12 +45,6 @@ def _worker(  # noqa: C901
             elif cmd == "reset":
                 maybe_options = {"options": data[1]} if data[1] else {}
                 observation, reset_info = env.reset(seed=data[0], **maybe_options)
-                # physics_data = PhysicsData(
-                #     xpos=env.unwrapped.named.data.xpos.copy(),
-                #     qpos=env.unwrapped.named.data.qpos.copy(),
-                #     qvel=env.unwrapped.named.data.qvel.copy()
-                # )
-
                 remote.send((observation, reset_info, env.unwrapped.named.data.xpos.copy()))
             elif cmd == "render":
                 remote.send(env.render())

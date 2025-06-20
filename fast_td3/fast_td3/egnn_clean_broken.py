@@ -1,6 +1,66 @@
 from torch import nn
 import torch
-import numpy as np
+
+
+EDGE_SRC = torch.tensor(
+    [0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 10, 10, 11, 12, 13, 10, 15, 16, 17],
+    dtype=torch.long,
+)
+
+EDGE_DST = torch.tensor(
+    [1, 2, 3, 4, 6, 7, 8, 9, 0, 5, 11, 12, 13, 14, 10, 15, 16, 17, 18],
+    dtype=torch.long,
+)
+
+XPOS_INDICES = torch.tensor(
+    [
+        2,
+        3,
+        4,
+        5,
+        6,  # left leg links
+        7,
+        8,
+        9,
+        10,
+        11,  # right leg links
+        12,  # torso link
+        13,
+        14,
+        15,
+        16,  # left arm links
+        18,
+        19,
+        20,
+        21,  # right arm links
+    ],
+    dtype=torch.int,
+)
+
+EDGE_TYPE_INDICES = torch.tensor(
+    [
+        0,
+        0,
+        0,
+        0,  # Left leg connections
+        1,
+        1,
+        1,
+        1,  # Right leg connections
+        2,
+        2,  # Torso connections
+        3,
+        3,
+        3,
+        3,  # Left arm connections
+        4,
+        4,
+        4,
+        4,  # Right arm connections
+    ],
+    dtype=torch.int,
+)
+
 
 class E_GCL(nn.Module):
     """
@@ -8,7 +68,19 @@ class E_GCL(nn.Module):
     re
     """
 
-    def __init__(self, input_nf, output_nf, hidden_nf, edges_in_d=0, act_fn=nn.SiLU(), residual=True, attention=False, normalize=False, coords_agg='mean', tanh=False):
+    def __init__(
+        self,
+        input_nf,
+        output_nf,
+        hidden_nf,
+        edges_in_d=0,
+        act_fn=nn.SiLU(),
+        residual=True,
+        attention=False,
+        normalize=False,
+        coords_agg="mean",
+        tanh=False,
+    ):
         super(E_GCL, self).__init__()
         input_edge = input_nf * 2
         self.residual = residual
@@ -23,12 +95,14 @@ class E_GCL(nn.Module):
             nn.Linear(input_edge + edge_coords_nf + edges_in_d, hidden_nf),
             act_fn,
             nn.Linear(hidden_nf, hidden_nf),
-            act_fn)
+            act_fn,
+        )
 
         self.node_mlp = nn.Sequential(
             nn.Linear(hidden_nf + input_nf, hidden_nf),
             act_fn,
-            nn.Linear(hidden_nf, output_nf))
+            nn.Linear(hidden_nf, output_nf),
+        )
 
         layer = nn.Linear(hidden_nf, 1, bias=False)
         torch.nn.init.xavier_uniform_(layer.weight, gain=0.001)
@@ -42,9 +116,7 @@ class E_GCL(nn.Module):
         self.coord_mlp = nn.Sequential(*coord_mlp)
 
         if self.attention:
-            self.att_mlp = nn.Sequential(
-                nn.Linear(hidden_nf, 1),
-                nn.Sigmoid())
+            self.att_mlp = nn.Sequential(nn.Linear(hidden_nf, 1), nn.Sigmoid())
 
     def edge_model(self, source, target, radial, edge_attr):
         if edge_attr is None:  # Unused.
@@ -72,12 +144,12 @@ class E_GCL(nn.Module):
     def coord_model(self, coord, edge_index, coord_diff, edge_feat):
         row, col = edge_index
         trans = coord_diff * self.coord_mlp(edge_feat)
-        if self.coords_agg == 'sum':
+        if self.coords_agg == "sum":
             agg = unsorted_segment_sum(trans, row, num_segments=coord.size(0))
-        elif self.coords_agg == 'mean':
+        elif self.coords_agg == "mean":
             agg = unsorted_segment_mean(trans, row, num_segments=coord.size(0))
         else:
-            raise Exception('Wrong coords_agg parameter' % self.coords_agg)
+            raise Exception("Wrong coords_agg parameter" % self.coords_agg)
         coord = coord + agg
         return coord
 
@@ -104,7 +176,7 @@ class E_GCL(nn.Module):
 
 
 class EGNN(nn.Module):
-    def __init__(self, in_node_nf, hidden_nf, out_node_nf, in_edge_nf, device, batch_size, act_fn=nn.SiLU(), n_layers=4, residual=True, attention=False, normalize=False, tanh=False):
+    def __init__(self, in_node_nf, hidden_nf, out_node_nf, in_edge_nf, batch_size, device, act_fn=nn.SiLU(), n_layers=4, residual=True, attention=False, normalize=False, tanh=False):
         '''
 
         :param in_node_nf: Number of features for 'h' at the input
@@ -132,7 +204,23 @@ class EGNN(nn.Module):
         self.n_layers = n_layers
         self.embedding_in = nn.Linear(in_node_nf, self.hidden_nf, device=device)
         self.embedding_out = nn.Linear(self.hidden_nf, out_node_nf, device=device)
+
+        self.register_buffer("src", EDGE_SRC.to(device))
+        self.register_buffer("dst", EDGE_DST.to(device))
+        self.register_buffer("edge_type_indices", EDGE_TYPE_INDICES.to(device))
+        self.register_buffer("xpos_indices", XPOS_INDICES.to(device))
         self.batch_size = batch_size
+
+              
+        edge_offset = torch.arange(batch_size, device=device) * 19  
+        src_batch = self.src.view(1, -1) + edge_offset.view(-1, 1)  # [B, E]
+        dst_batch = self.dst.view(1, -1) + edge_offset.view(-1, 1)  # [B, E]
+
+        self.register_buffer("edge_index", torch.stack([
+            src_batch.reshape(-1),
+            dst_batch.reshape(-1)
+        ], dim=0))
+        
         for i in range(0, n_layers):
             self.add_module("gcl_%d" % i, E_GCL(self.hidden_nf, self.hidden_nf, self.hidden_nf, edges_in_d=in_edge_nf,
                                                 act_fn=act_fn, residual=residual, attention=attention,
@@ -150,96 +238,38 @@ class EGNN(nn.Module):
         h = h.view(batch_size, 19)
 
         return h
-
+    
     def build_batched_egnn_input(self, obs, xpos):
-
-        joint_names = [
-            "left_hip_yaw", "left_hip_roll", "left_hip_pitch", "left_knee", "left_ankle",
-            "right_hip_yaw", "right_hip_roll", "right_hip_pitch", "right_knee", "right_ankle",
-            "torso",
-            "left_shoulder_pitch", "left_shoulder_roll", "left_shoulder_yaw", "left_elbow",
-            "right_shoulder_pitch", "right_shoulder_roll", "right_shoulder_yaw", "right_elbow",
-        ]
-        joint_idx = {name: idx for idx, name in enumerate(joint_names)}
-        edge_list = [
-            # Left leg
-            (joint_idx["left_hip_yaw"], joint_idx["left_hip_roll"]),
-            (joint_idx["left_hip_roll"], joint_idx["left_hip_pitch"]),
-            (joint_idx["left_hip_pitch"], joint_idx["left_knee"]),
-            (joint_idx["left_knee"], joint_idx["left_ankle"]),
-
-            # Right leg
-            (joint_idx["right_hip_yaw"], joint_idx["right_hip_roll"]),
-            (joint_idx["right_hip_roll"], joint_idx["right_hip_pitch"]),
-            (joint_idx["right_hip_pitch"], joint_idx["right_knee"]),
-            (joint_idx["right_knee"], joint_idx["right_ankle"]),
-
-            # Torso
-            (joint_idx["torso"], joint_idx["left_hip_yaw"]),
-            (joint_idx["torso"], joint_idx["right_hip_yaw"]),
-
-            # Left arm 
-            (joint_idx["torso"], joint_idx["left_shoulder_pitch"]),
-            (joint_idx["left_shoulder_pitch"], joint_idx["left_shoulder_roll"]),
-            (joint_idx["left_shoulder_roll"], joint_idx["left_shoulder_yaw"]),
-            (joint_idx["left_shoulder_yaw"], joint_idx["left_elbow"]),
-
-            # Right arm
-            (joint_idx["torso"], joint_idx["right_shoulder_pitch"]),
-            (joint_idx["right_shoulder_pitch"], joint_idx["right_shoulder_roll"]),
-            (joint_idx["right_shoulder_roll"], joint_idx["right_shoulder_yaw"]),
-            (joint_idx["right_shoulder_yaw"], joint_idx["right_elbow"]),
-        ]
-        
         batch_size = obs.shape[0]
-        print(batch_size)
+        num_nodes = 19
 
-        src, dst = zip(*edge_list)  # Unpack edge list into two tuples
-        src = torch.tensor(src, dtype=torch.long, device=obs.device)
-        dst = torch.tensor(dst, dtype=torch.long, device=obs.device)
+        # Node features
+        #print("xpos.shape", xpos.shape)
+        x = xpos[:, self.xpos_indices].reshape(batch_size * num_nodes, 3)  # [B*N, 3]
+        h = obs[:, 32:].reshape(batch_size * num_nodes, 1)  # [B*N, 1]
 
-        # Stack edges for batch
-        src_batch = []
-        dst_batch = []
-        for i in range(batch_size):
-            offset = 19 * i  # Assume 19 nodes per graph in batch
-            src_batch.append(src + offset)
-            dst_batch.append(dst + offset)
+        # for the first sample cases        
+        if (batch_size == self.batch_size):
+            edge_index = self.edge_index
+        else:
+            edge_index = self.edge_index[:, :batch_size*self.src.shape[0]]
 
-        # Concatenate all batched edges
-        src_batch = torch.cat(src_batch)  # shape: [batch_size * num_edges]
-        dst_batch = torch.cat(dst_batch)
 
-        edge_index = torch.stack([src_batch, dst_batch], dim=0)  # shape: [2, batch_size * num_edges]
+        # Edge attributes
+        x_i = x[edge_index[0]]  # [B*E, 3]
+        x_j = x[edge_index[1]]  # [B*E, 3]
 
-        # print(edge_index)
+        edge_attr = torch.norm(x_i - x_j, dim=1, keepdim=True)  # [B*E, 1]
 
-        xpos_indices = [
-            2,  # left_hip_yaw_link
-            3,  # left_hip_roll_link
-            4,  # left_hip_pitch_link
-            5,  # left_knee_link
-            6,  # left_ankle_link
-            7,  # right_hip_yaw_link
-            8,  # right_hip_roll_link
-            9,  # right_hip_pitch_link
-            10,  # right_knee_link
-            11,  # right_ankle_link
-            12,  # torso_link
-            13,  # left_shoulder_pitch_link
-            14,  # left_shoulder_roll_link
-            15,  # left_shoulder_yaw_link
-            16,  # left_elbow_link
-            18,  # right_shoulder_pitch_link
-            19,  # right_shoulder_roll_link
-            20,  # right_shoulder_yaw_link
-            21   # right_elbow_link
-        ]
-        x = xpos[:, xpos_indices].reshape(-1, 3)  # (B*N, 3)
-
-        h = obs[:, 32:].reshape(-1,1)  # (B*N, 1)
-
-        return h, x, edge_index, None
+        # check for nan / inf
+        if torch.isnan(edge_attr).any() or torch.isinf(edge_attr).any():
+            raise ValueError("Edge attributes contain NaN or Inf values.")
+        if torch.isnan(h).any() or torch.isinf(h).any():
+            raise ValueError("Node features contain NaN or Inf values.")
+        if torch.isnan(x).any() or torch.isinf(x).any():
+            raise ValueError("Node positions contain NaN or Inf values.")
+        
+        return h, x, edge_index, edge_attr
 
 
 
@@ -289,6 +319,8 @@ def get_edges_batch(n_nodes, batch_size):
 
 
 
+
+
 if __name__ == "__main__":
     # Dummy parameters
     batch_size = 8
@@ -297,7 +329,7 @@ if __name__ == "__main__":
     x_dim = 3
 
     # Dummy variables h, x and fully connected edges
-    h = torch.ones(batch_size *  n_nodes, n_feat)
+    h = torch.ones(batch_size * n_nodes, n_feat)
     x = torch.ones(batch_size * n_nodes, x_dim)
     edges, edge_attr = get_edges_batch(n_nodes, batch_size)
 

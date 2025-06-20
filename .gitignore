@@ -15,3 +15,5 @@ models
 outputs
 runs
 wandb
+
+.vscode

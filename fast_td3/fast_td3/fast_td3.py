@@ -249,7 +249,7 @@ class ActorGNN(nn.Module):
             in_node_nf=n_node_feat,
             hidden_nf=hidden_dim,
             out_node_nf=1,
-            in_edge_nf=0,
+            in_edge_nf=1,
             batch_size=batch_size,
             device=device
         )
@@ -263,9 +263,11 @@ class ActorGNN(nn.Module):
         self.register_buffer("std_max", torch.as_tensor(std_max, device=device))
 
     def forward(self, obs, xpos) -> torch.Tensor:
-        h, x, edges, _ = self.egnn.build_batched_egnn_input(obs, xpos)
+        h, x, edges, edge_attr = self.egnn.build_batched_egnn_input(obs, xpos)
 
-        return self.egnn(h, x, edges, None)       
+        resutl = self.egnn(h, x, edges, edge_attr)
+
+        return resutl.nan_to_num_(nan=0.0)   
 
     def explore(
         self, obs: torch.Tensor, xpos: torch.Tensor, dones: torch.Tensor = None, deterministic: bool = False

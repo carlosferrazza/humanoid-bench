@@ -1,7 +1,7 @@
 from torch import nn
 import torch
-import numpy as np
 
+from fast_td3.skeleton_builder import build_edge_index_and_attr
 
 class E_GCL(nn.Module):
     """
@@ -14,7 +14,7 @@ class E_GCL(nn.Module):
         input_nf,
         output_nf,
         hidden_nf,
-        edges_in_d=0,
+        edges_in_d,
         act_fn=nn.SiLU(),
         residual=True,
         attention=False,
@@ -158,7 +158,10 @@ class EGNN(nn.Module):
         self.device = device
         self.n_layers = n_layers
         self.embedding_in = nn.Linear(in_node_nf, self.hidden_nf, device=device)
-        self.embedding_out = nn.Linear(self.hidden_nf, out_node_nf, device=device)
+        self.embedding_out = nn.Sequential(
+            nn.Linear(self.hidden_nf, out_node_nf, device=device),
+            nn.Tanh(),
+        )
         self.batch_size = batch_size
         for i in range(0, n_layers):
             self.add_module(
@@ -177,170 +180,37 @@ class EGNN(nn.Module):
             )
         self.to(self.device)
 
-        self.xpos_indices = [
-            2,  # left_hip_yaw_link
-            3,  # left_hip_roll_link
-            4,  # left_hip_pitch_link
-            5,  # left_knee_link
-            6,  # left_ankle_link
-            7,  # right_hip_yaw_link
-            8,  # right_hip_roll_link
-            9,  # right_hip_pitch_link
-            10,  # right_knee_link
-            11,  # right_ankle_link
-            12,  # torso_link
-            13,  # left_shoulder_pitch_link
-            14,  # left_shoulder_roll_link
-            15,  # left_shoulder_yaw_link
-            16,  # left_elbow_link
-            18,  # right_shoulder_pitch_link
-            19,  # right_shoulder_roll_link
-            20,  # right_shoulder_yaw_link
-            21,  # right_elbow_link
-        ]
-
-        self.xpos_indices = [
-            2,  # left_hip_yaw_link
-            3,  # left_hip_roll_link
-            4,  # left_hip_pitch_link
-            5,  # left_knee_link
-            6,  # left_ankle_link
-            7,  # right_hip_yaw_link
-            8,  # right_hip_roll_link
-            9,  # right_hip_pitch_link
-            10,  # right_knee_link
-            11,  # right_ankle_link
-            12,  # torso_link
-            13,  # left_shoulder_pitch_link
-            14,  # left_shoulder_roll_link
-            15,  # left_shoulder_yaw_link
-            16,  # left_elbow_link
-            18,  # right_shoulder_pitch_link
-            19,  # right_shoulder_roll_link
-            20,  # right_shoulder_yaw_link
-            21,  # right_elbow_link
-        ]
-
-        joint_names = [
-            "left_hip_yaw",
-            "left_hip_roll",
-            "left_hip_pitch",
-            "left_knee",
-            "left_ankle",
-            "right_hip_yaw",
-            "right_hip_roll",
-            "right_hip_pitch",
-            "right_knee",
-            "right_ankle",
-            "torso",
-            "left_shoulder_pitch",
-            "left_shoulder_roll",
-            "left_shoulder_yaw",
-            "left_elbow",
-            "right_shoulder_pitch",
-            "right_shoulder_roll",
-            "right_shoulder_yaw",
-            "right_elbow",
-        ]
-        joint_idx = {name: idx for idx, name in enumerate(joint_names)}
-        edge_list = [
-            # Left leg
-            (joint_idx["left_hip_yaw"], joint_idx["left_hip_roll"]),
-            (joint_idx["left_hip_roll"], joint_idx["left_hip_pitch"]),
-            (joint_idx["left_hip_pitch"], joint_idx["left_knee"]),
-            (joint_idx["left_knee"], joint_idx["left_ankle"]),
-            # Right leg
-            (joint_idx["right_hip_yaw"], joint_idx["right_hip_roll"]),
-            (joint_idx["right_hip_roll"], joint_idx["right_hip_pitch"]),
-            (joint_idx["right_hip_pitch"], joint_idx["right_knee"]),
-            (joint_idx["right_knee"], joint_idx["right_ankle"]),
-            # Torso
-            (joint_idx["torso"], joint_idx["left_hip_yaw"]),
-            (joint_idx["torso"], joint_idx["right_hip_yaw"]),
-            # Left arm
-            (joint_idx["torso"], joint_idx["left_shoulder_pitch"]),
-            (joint_idx["left_shoulder_pitch"], joint_idx["left_shoulder_roll"]),
-            (joint_idx["left_shoulder_roll"], joint_idx["left_shoulder_yaw"]),
-            (joint_idx["left_shoulder_yaw"], joint_idx["left_elbow"]),
-            # Right arm
-            (joint_idx["torso"], joint_idx["right_shoulder_pitch"]),
-            (joint_idx["right_shoulder_pitch"], joint_idx["right_shoulder_roll"]),
-            (joint_idx["right_shoulder_roll"], joint_idx["right_shoulder_yaw"]),
-            (joint_idx["right_shoulder_yaw"], joint_idx["right_elbow"]),
-        ]
-
-        self.edge_type_encoding = torch.tensor([  
-            0,  # (left_hip_yaw, left_hip_roll)      - left_leg
-            0,  # (left_hip_roll, left_hip_pitch)    - left_leg
-            0,  # (left_hip_pitch, left_knee)        - left_leg
-            0,  # (left_knee, left_ankle)            - left_leg
-
-            1,  # (right_hip_yaw, right_hip_roll)    - right_leg
-            1,  # (right_hip_roll, right_hip_pitch)  - right_leg
-            1,  # (right_hip_pitch, right_knee)      - right_leg
-            1,  # (right_knee, right_ankle)          - right_leg
-
-            2,  # (torso, left_hip_yaw)              - torso_connection
-            2,  # (torso, right_hip_yaw)             - torso_connection
-
-            3,  # (torso, left_shoulder_pitch)      - left_arm
-            3,  # (left_shoulder_pitch, left_shoulder_roll) - left_arm
-            3,  # (left_shoulder_roll, left_shoulder_yaw)   - left_arm
-            3,  # (left_shoulder_yaw, left_elbow)            - left_arm
-
-            4,  # (torso, right_shoulder_pitch)     - right_arm
-            4,  # (right_shoulder_pitch, right_shoulder_roll) - right_arm
-            4,  # (right_shoulder_roll, right_shoulder_yaw)   - right_arm
-            4,  # (right_shoulder_yaw, right_elbow)            - right_arm
-        ], dtype=torch.long, device=device)
-
-        src, dst = zip(*edge_list)  # Unpack edge list into two tuples
-        src = torch.tensor(src, dtype=torch.long, device=device)
-        dst = torch.tensor(dst, dtype=torch.long, device=device)
-
-        # Stack edges for batch
-        src_batch = []
-        dst_batch = []
-        egde_attr_batch = []
-        for i in range(self.batch_size):
-            offset = 19 * i
-            src_batch.append(src + offset)
-            dst_batch.append(dst + offset)
-            egde_attr_batch.append(self.edge_type_encoding)
-
-        src_batch = torch.cat(src_batch)
-        dst_batch = torch.cat(dst_batch)
-
-        self.edge_attr = torch.cat(egde_attr_batch).unsqueeze(1)  # (B*N, 1)
-        self.edge_index = [src_batch, dst_batch]
+        edge_index, edge_attr = build_edge_index_and_attr("h1", self.batch_size, self.device)
+        self.register_buffer("edge_index", edge_index)
+        self.register_buffer("edge_attr", edge_attr)
 
     def forward(self, h, x, edges, edge_attr):
         batch_size = int(h.shape[0] / (19))
 
         # Debug: Check for NaNs/Infs in input tensors
-        if torch.isnan(h).any() or torch.isinf(h).any():
-            print("[DEBUG] NaN or Inf detected in input h", h)
-        if torch.isnan(x).any() or torch.isinf(x).any():
-            print("[DEBUG] NaN or Inf detected in input x", x)
-        if edge_attr is not None and (torch.isnan(edge_attr).any() or torch.isinf(edge_attr).any()):
-            print("[DEBUG] NaN or Inf detected in input edge_attr", edge_attr)
+        # if torch.isnan(h).any() or torch.isinf(h).any():
+        #     print("[DEBUG] NaN or Inf detected in input h", h)
+        # if torch.isnan(x).any() or torch.isinf(x).any():
+        #     print("[DEBUG] NaN or Inf detected in input x", x)
+        # if edge_attr is not None and (torch.isnan(edge_attr).any() or torch.isinf(edge_attr).any()):
+        #     print("[DEBUG] NaN or Inf detected in input edge_attr", edge_attr)
 
         h = self.embedding_in(h)
         for i in range(0, self.n_layers):
             h, x, _ = self._modules["gcl_%d" % i](h, edges, x, edge_attr=edge_attr)
             # Debug: Check for NaNs/Infs after each layer
-            if torch.isnan(h).any() or torch.isinf(h).any():
-                print(f"[DEBUG] NaN or Inf detected in h after gcl_{i}", h)
-            if torch.isnan(x).any() or torch.isinf(x).any():
-                print(f"[DEBUG] NaN or Inf detected in x after gcl_{i}", x)
+            # if torch.isnan(h).any() or torch.isinf(h).any():
+            #     print(f"[DEBUG] NaN or Inf detected in h after gcl_{i}", h)
+            # if torch.isnan(x).any() or torch.isinf(x).any():
+            #     print(f"[DEBUG] NaN or Inf detected in x after gcl_{i}", x)
 
         h = self.embedding_out(h)
 
         h = h.view(batch_size, 19)
 
         # Debug: Check for NaNs/Infs in output
-        if torch.isnan(h).any() or torch.isinf(h).any():
-            print("[DEBUG] NaN or Inf detected in output h", h)
+        # if torch.isnan(h).any() or torch.isinf(h).any():
+        #     print("[DEBUG] NaN or Inf detected in output h", h)
 
         return h
 
@@ -361,10 +231,9 @@ class EGNN(nn.Module):
             edge_index = [t[: batch_size * 18].clone() for t in self.edge_index]
             edge_attr = self.edge_attr[: batch_size * 18].clone()
 
-        # x = xpos[:, self.xpos_indices].reshape(-1, 3)  # (B*N, 3)
-        x = obs[:, 7:26].reshape(-1, 1)
-        
-        h = obs[:, 32:].reshape(-1, 1)  # (B*N, 1)
+        x = xpos[:, 1:].reshape(-1, 3)  # (B*N, 3)
+
+        h = torch.stack([obs[:, 32:].reshape(-1, 1), obs[:, 7:26].reshape(-1, 1)], dim=1).squeeze(2)  # (B*N, 2)
 
         # if torch.isnan(x).any() or torch.isinf(x).any():
         #     print("NaN or Inf detected in input x")

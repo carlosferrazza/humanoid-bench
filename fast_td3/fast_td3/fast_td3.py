@@ -236,8 +236,8 @@ class ActorGNN(nn.Module):
         std_min: float = 0.05,
         std_max: float = 0.8,
         n_nodes: int = 19,
-        n_node_feat: int = 1,
-        n_edge_feat: int = 1,
+        n_node_feat: int = 2,
+        n_edge_feat: int = 0,
     ):
         super().__init__()
         self.n_act = n_act
@@ -249,10 +249,13 @@ class ActorGNN(nn.Module):
             in_node_nf=n_node_feat,
             hidden_nf=hidden_dim,
             out_node_nf=1,
-            in_edge_nf=1,
+            in_edge_nf=n_edge_feat,
             batch_size=batch_size,
             device=device
         )
+
+        # Initialize EGNN weights similar to Actor's fc_mu initialization
+        # Note: EGNN handles its own initialization internally
 
         # Initialize noise parameters
         noise_scales = (
@@ -265,9 +268,9 @@ class ActorGNN(nn.Module):
     def forward(self, obs, xpos) -> torch.Tensor:
         h, x, edges, edge_attr = self.egnn.build_batched_egnn_input(obs, xpos)
 
-        resutl = self.egnn(h, x, edges, edge_attr)
+        result = self.egnn(h, x, edges, None)
 
-        return resutl.nan_to_num_(nan=0.0)   
+        return result
 
     def explore(
         self, obs: torch.Tensor, xpos: torch.Tensor, dones: torch.Tensor = None, deterministic: bool = False

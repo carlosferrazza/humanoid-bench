@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from fast_td3.base_gnn import BaseGNN
+from fast_td3.actors.gnn.base_gnn import BaseGNN
 
 
 class ActorMPNN(nn.Module):

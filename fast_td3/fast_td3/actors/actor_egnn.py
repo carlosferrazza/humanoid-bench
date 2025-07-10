@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from fast_td3.egnn import EGNN
+from fast_td3.actors.gnn.egnn import EGNN
 
 class ActorEGNN(nn.Module):
     def __init__(

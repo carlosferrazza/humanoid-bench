@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.nn import LayerNorm, Linear, ReLU
 from torch_geometric.data import Data
 
-from fast_td3.mpnn import ProcessorLayer
+from .mpnn import ProcessorLayer
 from fast_td3.skeleton_builder import build_edge_index_and_attr_mpnn
 
 

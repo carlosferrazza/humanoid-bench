@@ -113,5 +113,5 @@ class G1:
         7, 8, 9, 10, 11, 12, 13, 12, 14, 12, 15,
     ]
 
-    num_edges = 34
-    num_nodes = 37
+    num_edges = len(edge_list)
+    num_nodes = len(joint_dict)

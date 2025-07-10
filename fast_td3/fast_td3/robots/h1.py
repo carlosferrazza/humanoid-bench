@@ -47,27 +47,26 @@ class H1:
         (joint_dict["right_shoulder_yaw"], joint_dict["right_elbow"]),
     ]
 
-    edge_type_encoding = [  
-    0,  # (left_hip_yaw, left_hip_roll)      - left_leg
-    1,  # (left_hip_roll, left_hip_pitch)    - left_leg
-    2,  # (left_hip_pitch, left_knee)        - left_leg
-    3,  # (left_knee, left_ankle)            - left_leg
+    edge_type_encoding = [
+        0,  # (left_hip_yaw, left_hip_roll)      - left_leg
+        1,  # (left_hip_roll, left_hip_pitch)    - left_leg
+        2,  # (left_hip_pitch, left_knee)        - left_leg
+        3,  # (left_knee, left_ankle)            - left_leg
+        0,  # (right_hip_yaw, right_hip_roll)    - right_leg
+        1,  # (right_hip_roll, right_hip_pitch)  - right_leg
+        2,  # (right_hip_pitch, right_knee)      - right_leg
+        3,  # (right_knee, right_ankle)          - right_leg
+        4,  # (torso, left_hip_yaw)              - torso_connection
+        4,  # (torso, right_hip_yaw)             - torso_connection
+        5,  # (torso, left_shoulder_pitch)      - left_arm
+        6,  # (left_shoulder_pitch, left_shoulder_roll) - left_arm
+        7,  # (left_shoulder_roll, left_shoulder_yaw)   - left_arm
+        8,  # (left_shoulder_yaw, left_elbow)            - left_arm
+        5,  # (torso, right_shoulder_pitch)     - right_arm
+        6,  # (right_shoulder_pitch, right_shoulder_roll) - right_arm
+        7,  # (right_shoulder_roll, right_shoulder_yaw)   - right_arm
+        8,  # (right_shoulder_yaw, right_elbow)            - right_arm
+    ]
 
-    0,  # (right_hip_yaw, right_hip_roll)    - right_leg
-    1,  # (right_hip_roll, right_hip_pitch)  - right_leg
-    2,  # (right_hip_pitch, right_knee)      - right_leg
-    3,  # (right_knee, right_ankle)          - right_leg
-
-    4,  # (torso, left_hip_yaw)              - torso_connection
-    4,  # (torso, right_hip_yaw)             - torso_connection
-
-    5,  # (torso, left_shoulder_pitch)      - left_arm
-    6,  # (left_shoulder_pitch, left_shoulder_roll) - left_arm
-    7,  # (left_shoulder_roll, left_shoulder_yaw)   - left_arm
-    8,  # (left_shoulder_yaw, left_elbow)            - left_arm
-
-    5,  # (torso, right_shoulder_pitch)     - right_arm
-    6,  # (right_shoulder_pitch, right_shoulder_roll) - right_arm
-    7,  # (right_shoulder_roll, right_shoulder_yaw)   - right_arm
-    8,  # (right_shoulder_yaw, right_elbow)            - right_arm
-]
+    num_nodes = len(joint_dict)
+    num_edges = len(edge_list)

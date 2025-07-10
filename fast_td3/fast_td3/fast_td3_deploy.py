@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from .fast_td3_utils import EmpiricalNormalization
-from .fast_td3 import Actor
+from .actors import Actor
 
 
 class Policy(nn.Module):

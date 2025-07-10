@@ -1,0 +1,5 @@
+{
+    "hidden_dim": 80,
+    "n_layers": 4,
+    "act_fn": "relu"
+}

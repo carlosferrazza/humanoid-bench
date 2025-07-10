@@ -1,0 +1,10 @@
+{
+    "hidden_dim": 320,
+    "latent_dim": 48,
+    "n_node_feat": 2,
+    "n_edge_feat": 1,
+    "num_message": 2,
+    "node_encoder_layers": 2, 
+    "edge_encoder_layers": 1,
+    "node_decoder_layers": 1
+}

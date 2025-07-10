@@ -1,5 +1,8 @@
 import os
 import sys
+import json
+import time
+import uuid
 
 os.environ["TORCHDYNAMO_INLINE_INBUILT_NN_MODULES"] = "1"
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -26,7 +29,7 @@ from fast_td3.fast_td3_utils import (
     SimpleReplayBufferGNN,
     save_params,
 )
-from fast_td3 import Critic 
+from fast_td3 import Critic
 from fast_td3.actors import ActorEGNN, Actor, ActorMPNN
 from fast_td3.hyperparams import HumanoidBenchArgs
 import argparse
@@ -36,6 +39,7 @@ import base64
 import imageio
 import tempfile
 import os
+
 
 def main():
     parser = argparse.ArgumentParser(description="Train humanoid using FastTD3")
@@ -60,23 +64,32 @@ def main():
         help="Interval for rendering the environment.",
     )
     parser.add_argument(
-        "--eval_interval", type=int, default=5000, help="Interval for evaluating the agent."
+        "--eval_interval",
+        type=int,
+        default=5000,
+        help="Interval for evaluating the agent.",
     )
     parser.add_argument(
-        "--num_envs", type=int, default=16, help="Number of parallel environments to use."
+        "--num_envs",
+        type=int,
+        default=16,
+        help="Number of parallel environments to use.",
     )
     parser.add_argument(
         "--batch_size", type=int, default=8192, help="Batch size for training."
     )
-    parser.add_argument("--hidden_dim", type=int, default=96, help="Number of hidden dim in actor")
-    parser.add_argument("--num_layers", type=int, default=4, help="Number of layers")
-    parser.add_argument("--act_fn", type=str, help="Activation function", default="relu", choices=["relu", "silu", "leaky_relu"])
     parser.add_argument("--checkpoint_path", type=str)
-    parser.add_argument('--obs_normalization', action='store_true')
-    parser.add_argument('--no_obs_normalization', dest='obs_normalization', action='store_false')
-
+    parser.add_argument("--model_kwargs", type=str, default=None,
+                        help='Additional model parameters (as defined in the class) in JSON format (path to the file).' \
+                        'If not provided, defaults params will be used.')
 
     terminal_args = vars(parser.parse_args())
+
+    if terminal_args["model_kwargs"] is not None:
+        with open(terminal_args["model_kwargs"], "r") as f:
+            model_kwargs = json.load(f)
+    else:
+        model_kwargs = {}
 
     args = HumanoidBenchArgs(
         env_name=terminal_args["env_name"],
@@ -85,15 +98,21 @@ def main():
         eval_interval=terminal_args["eval_interval"],
         num_envs=terminal_args["num_envs"],
         batch_size=terminal_args["batch_size"],
-        obs_normalization=terminal_args["obs_normalization"]
+        model_kwargs=model_kwargs,
     )
 
     print(f"Training with args: {terminal_args}")
 
-
     use_wandb = True
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    run_name = f"{terminal_args['actor']} {args.env_name} {args.num_envs}envs {args.total_timesteps}steps {now}"
+    uid = uuid.uuid4().hex[:6]  # 6-char unique ID
+
+    run_name = (
+        f"{terminal_args['actor']}_"
+        f"{args.env_name}_"
+        f"{args.num_envs}envs_"
+        f"{args.total_timesteps}steps_"
+        f"{uid}"
+    )
 
     if use_wandb:
         wandb.init(
@@ -103,10 +122,6 @@ def main():
             config=vars(args),
             save_code=True,
         )
-
-        wandb.save("./fast_td3/fast_td3.py")
-        wandb.save("./fast_td3/egnn_clean.py")
-
 
     amp_enabled = args.amp and args.cuda and torch.cuda.is_available()
     amp_device_type = (
@@ -134,12 +149,12 @@ def main():
             raise ValueError("No GPU available")
     print(f"Using device: {device}")
 
-
     env_type = "humanoid_bench"
     envs = HumanoidBenchEnv(args.env_name, args.num_envs, device=device)
     eval_envs = envs
-    render_env = HumanoidBenchEnv(args.env_name, 1, render_mode="rgb_array", device=device)
-
+    render_env = HumanoidBenchEnv(
+        args.env_name, 1, render_mode="rgb_array", device=device
+    )
 
     n_act = envs.num_actions
     n_obs = envs.num_obs if type(envs.num_obs) == int else envs.num_obs[0]
@@ -153,10 +168,11 @@ def main():
         n_critic_obs = n_obs
     action_low, action_high = -1.0, 1.0
 
-
     if args.obs_normalization:
         obs_normalizer = EmpiricalNormalization(shape=n_obs, device=device)
-        critic_obs_normalizer = EmpiricalNormalization(shape=n_critic_obs, device=device)
+        critic_obs_normalizer = EmpiricalNormalization(
+            shape=n_critic_obs, device=device
+        )
         xpos_normalizer = EmpiricalNormalization(shape=(20, 3), device=device)
     else:
         obs_normalizer = nn.Identity()
@@ -167,9 +183,7 @@ def main():
     normalize_critic_obs = critic_obs_normalizer.forward
     normalize_xpos = xpos_normalizer.forward
 
-
-    if terminal_args["actor"] == "egnn": 
-        # Actor setup
+    if terminal_args["actor"] == "egnn":
         actor = ActorEGNN(
             n_obs=n_obs,
             n_act=n_act,
@@ -177,13 +191,9 @@ def main():
             batch_size=args.batch_size,
             device=device,
             init_scale=args.init_scale,
-            hidden_dim=terminal_args["hidden_dim"],
-            n_layers=terminal_args["num_layers"],
-            act_fn=terminal_args["act_fn"]
-
+            **model_kwargs,
         )
 
-        # the twin actor
         actor_detach = ActorEGNN(
             n_obs=n_obs,
             n_act=n_act,
@@ -191,9 +201,7 @@ def main():
             batch_size=args.batch_size,
             device=device,
             init_scale=args.init_scale,
-            hidden_dim=terminal_args["hidden_dim"],
-            n_layers=terminal_args["num_layers"],
-            act_fn=terminal_args["act_fn"]
+            **model_kwargs,
         )
     elif terminal_args["actor"] == "mlp":
         actor = Actor(
@@ -220,11 +228,7 @@ def main():
             num_envs=args.num_envs,
             batch_size=args.batch_size,
             device=device,
-            init_scale=args.init_scale,
-            hidden_dim=256,
-            latent_dim=96,
-            n_layers=4,
-            act_fn="relu"
+            **model_kwargs,
         )
 
         # the twin actor
@@ -234,12 +238,9 @@ def main():
             num_envs=args.num_envs,
             batch_size=args.batch_size,
             device=device,
-            init_scale=args.init_scale,
-            hidden_dim=256,
-            latent_dim=96,
-            n_layers=4,
-            act_fn="relu"
+            **model_kwargs,
         )
+
     print(f"Actor num of parameters: {sum(p.numel() for p in actor.parameters())}")
     for name in actor.named_parameters():
         print(f"{name[0]} - {name[1].shape}")
@@ -293,7 +294,6 @@ def main():
         device=device,
     )
 
-
     checkpoint_path = terminal_args["checkpoint_path"]
     if checkpoint_path is not None:
         torch_checkpoint = torch.load(
@@ -311,7 +311,6 @@ def main():
         global_step = torch_checkpoint["global_step"]
     else:
         global_step = 0
-
 
     def evaluate():
         """
@@ -352,7 +351,9 @@ def main():
             episode_returns = torch.where(
                 ~done_masks, episode_returns + rewards, episode_returns
             )
-            episode_lengths = torch.where(~done_masks, episode_lengths + 1, episode_lengths)
+            episode_lengths = torch.where(
+                ~done_masks, episode_lengths + 1, episode_lengths
+            )
             done_masks = torch.logical_or(done_masks, dones)
             if done_masks.all():
                 break
@@ -362,7 +363,6 @@ def main():
         obs_normalizer.train()
         xpos_normalizer.train()
         return episode_returns.mean().item(), episode_lengths.mean().item()
-
 
     def render_with_rollout():
         obs_normalizer.eval()
@@ -408,10 +408,8 @@ def main():
         xpos_normalizer.train()
         return renders
 
-
     policy_noise = args.policy_noise
     noise_clip = args.noise_clip
-
 
     def update_main(data, logs_dict):
         """
@@ -424,7 +422,9 @@ def main():
 
         The critics learn to estimate Q-values for state-action pairs using temporal difference learning.
         """
-        with autocast(device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled):
+        with autocast(
+            device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled
+        ):
             # Extract transition data from replay buffer
             observations = data["observations"]
             next_observations = data["next"]["observations"]
@@ -462,7 +462,9 @@ def main():
             # TARGET POLICY SMOOTHING: Add clipped noise to target actions
             # This reduces overestimation by making the target policy less deterministic
             clipped_noise = torch.randn_like(actions)
-            clipped_noise = clipped_noise.mul(policy_noise).clamp(-noise_clip, noise_clip)
+            clipped_noise = clipped_noise.mul(policy_noise).clamp(
+                -noise_clip, noise_clip
+            )
 
             # Generate target actions using the main actor (not actor_detach) with added noise
             # print(f"Next observations shape: {next_observations.shape}")
@@ -540,9 +542,7 @@ def main():
         # Gradient clipping to prevent exploding gradients
         critic_grad_norm = torch.nn.utils.clip_grad_norm_(
             qnet.parameters(),
-            max_norm=(
-                args.max_grad_norm if args.max_grad_norm > 0 else float("inf")
-            ),
+            max_norm=(args.max_grad_norm if args.max_grad_norm > 0 else float("inf")),
         )
         scaler.step(q_optimizer)
         scaler.update()
@@ -554,7 +554,6 @@ def main():
         logs_dict["qf_max"] = qf1_next_target_value.max().detach()
         logs_dict["qf_min"] = qf1_next_target_value.min().detach()
         return logs_dict
-
 
     def update_pol(data, logs_dict):
         """
@@ -568,15 +567,21 @@ def main():
         The actor learns to select actions that maximize the expected Q-value,
         effectively learning the optimal policy through the actor-critic framework.
         """
-        with autocast(device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled):
+        with autocast(
+            device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled
+        ):
             # Use appropriate observations based on environment setup
             critic_observations = (
-                data["critic_observations"] if envs.asymmetric_obs else data["observations"]
+                data["critic_observations"]
+                if envs.asymmetric_obs
+                else data["observations"]
             )
 
             # Compute Q-values for current states with actions from the main actor
             # Note: This uses the main 'actor' network, not 'actor_detach'
-            qf1, qf2 = qnet(critic_observations, actor(data["observations"], data["xposs"]))
+            qf1, qf2 = qnet(
+                critic_observations, actor(data["observations"], data["xposs"])
+            )
 
             # Convert distributional Q-values to scalar estimates
             qf1_value = qnet.get_value(F.softmax(qf1, dim=1))
@@ -599,9 +604,7 @@ def main():
         # Gradient clipping to prevent exploding gradients
         actor_grad_norm = torch.nn.utils.clip_grad_norm_(
             actor.parameters(),
-            max_norm=(
-                args.max_grad_norm if args.max_grad_norm > 0 else float("inf")
-            ),
+            max_norm=(args.max_grad_norm if args.max_grad_norm > 0 else float("inf")),
         )
         scaler.step(actor_optimizer)
         scaler.update()
@@ -611,7 +614,6 @@ def main():
         logs_dict["actor_loss"] = actor_loss.detach()
         return logs_dict
 
-
     if args.compile:
         mode = None
         update_main = torch.compile(update_main, mode=mode)
@@ -620,7 +622,6 @@ def main():
         normalize_obs = torch.compile(normalize_obs, mode=mode)
         normalize_critic_obs = torch.compile(normalize_critic_obs, mode=mode)
         normalize_xpos = torch.compile(normalize_xpos, mode=mode)
-
 
     def frames_to_video_html(frames, fps=30):
         """
@@ -658,7 +659,6 @@ def main():
 
         return HTML(video_html)
 
-
     def update_video_display(frames, fps=30):
         """
         Display video frames as an embedded HTML5 video element.
@@ -670,7 +670,6 @@ def main():
         video_html = frames_to_video_html(frames, fps=fps)
         display(video_html)
 
-
     if envs.asymmetric_obs:
         obs, critic_obs = envs.reset_with_critic_obs()
         critic_obs = torch.as_tensor(critic_obs, device=device, dtype=torch.float)
@@ -679,8 +678,6 @@ def main():
     pbar = tqdm.tqdm(total=args.total_timesteps, initial=global_step)
     dones = None
     global_step = 0
-
-
 
     while global_step < args.total_timesteps:
         logs_dict = TensorDict()  # Dictionary to store training metrics for this step
@@ -693,11 +690,10 @@ def main():
         ):
             if isinstance(obs, tuple):
                 obs, xpos = obs
-           
+
             norm_obs = normalize_obs(obs)
             norm_xpos = normalize_xpos(xpos)
             actions = policy(obs=norm_obs, xpos=norm_xpos, dones=dones)
-            
 
         # ENVIRONMENT INTERACTION PHASE
         # Take actions in the environment and collect transition data
@@ -730,7 +726,9 @@ def main():
                 "next": {
                     "observations": true_next_obs,
                     "xposs": next_xpos,
-                    "rewards": torch.as_tensor(rewards, device=device, dtype=torch.float),
+                    "rewards": torch.as_tensor(
+                        rewards, device=device, dtype=torch.float
+                    ),
                     "truncations": truncations.long(),
                     "dones": dones.long(),
                 },
@@ -738,7 +736,7 @@ def main():
             batch_size=(envs.num_envs,),
             device=device,
         )
-        
+
         if envs.asymmetric_obs:
             transition["critic_observations"] = critic_obs
             transition["next"]["critic_observations"] = true_next_critic_obs
@@ -764,7 +762,9 @@ def main():
 
                 # Normalize observations for stable training
                 data["observations"] = normalize_obs(data["observations"])
-                data["next"]["observations"] = normalize_obs(data["next"]["observations"])
+                data["next"]["observations"] = normalize_obs(
+                    data["next"]["observations"]
+                )
                 data["xposs"] = normalize_xpos(data["xposs"])
                 data["next"]["xposs"] = normalize_xpos(data["next"]["xposs"])
                 if envs.asymmetric_obs:
@@ -794,7 +794,9 @@ def main():
                 # TARGET NETWORK SOFT UPDATE
                 # Slowly update target networks using exponential moving average
                 # This provides stable targets for Q-learning (prevents moving targets)
-                for param, target_param in zip(qnet.parameters(), qnet_target.parameters()):
+                for param, target_param in zip(
+                    qnet.parameters(), qnet_target.parameters()
+                ):
                     target_param.data.copy_(
                         args.tau * param.data + (1 - args.tau) * target_param.data
                     )
@@ -824,7 +826,10 @@ def main():
                         logs["eval_avg_length"] = eval_avg_length
 
                     # RENDERING: Generate and display videos of current policy
-                    if args.render_interval > 0 and global_step % args.render_interval == 0:
+                    if (
+                        args.render_interval > 0
+                        and global_step % args.render_interval == 0
+                    ):
                         renders = render_with_rollout()
                         print_logs = {
                             k: v.item() if isinstance(v, torch.Tensor) else v

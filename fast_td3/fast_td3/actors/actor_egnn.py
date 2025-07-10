@@ -19,14 +19,12 @@ class ActorEGNN(nn.Module):
         robot: str = "h1",
         std_min: float = 0.05,
         std_max: float = 0.8,
-        n_nodes: int = 19,
         n_node_feat: int = 2,
         n_edge_feat: int = 1,
     ):
         super().__init__()
         self.n_act = n_act
         self.n_envs = num_envs
-        self.n_nodes = n_nodes
 
         match act_fn:
             case "leaky_relu":

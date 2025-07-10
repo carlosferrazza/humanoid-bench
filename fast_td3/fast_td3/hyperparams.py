@@ -1,6 +1,7 @@
 import os
 from dataclasses import dataclass
 import tyro
+import json
 
 
 @dataclass
@@ -181,6 +182,7 @@ def get_args():
 class HumanoidBenchArgs(BaseArgs):
     # See HumanoidBench (https://arxiv.org/abs/2403.10506) for available task list
     total_timesteps: int = 100000
+    model_kwargs: json = None
 
 
 @dataclass

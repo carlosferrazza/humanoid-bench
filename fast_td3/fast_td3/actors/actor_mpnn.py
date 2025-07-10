@@ -11,15 +11,11 @@ class ActorMPNN(nn.Module):
         n_obs: int,
         n_act: int, 
         num_envs: int,
-        init_scale: float,
         batch_size: int,
         device: torch.device,
-        n_layers: int,
-        act_fn: str,
         robot: str = "h1",
         std_min: float = 0.05,
         std_max: float = 0.8,
-        n_nodes: int = 19,
         n_node_feat: int = 2,
         n_edge_feat: int = 0,
         hidden_dim: int = 128, 
@@ -32,18 +28,6 @@ class ActorMPNN(nn.Module):
         super().__init__()
         self.n_act = n_act
         self.n_envs = num_envs
-        self.n_nodes = n_nodes
-
-        match act_fn:
-            case "leaky_relu":
-                act_fn = nn.LeakyReLU()
-            case "silu":
-                act_fn = nn.SiLU()
-            case "relu":
-                act_fn = nn.ReLU()
-            case _:
-                raise ValueError(f"Unknown activation function: {act_fn}")
-
 
         self.mpnn = BaseGNN(
             input_dim_node=n_node_feat,

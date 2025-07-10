@@ -231,7 +231,7 @@ class EGNN(nn.Module):
             )  # (B*N, 2)
 
 
-        return h, x, edge_index, None
+        return h, x, edge_index, edge_attr
 
 
 def unsorted_segment_sum(data, segment_ids, num_segments):

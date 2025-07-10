@@ -56,6 +56,7 @@ class BaseGNN(torch.nn.Module):
             device
         )
         self.processor = self._create_processor(latent_dim, num_messages)
+        
         self.decoder = self._create_decoder(latent_dim, hidden_dim, output_dim, node_decoder_layers).to(device)
 
         edge_index, edge_attr, num_nodes, num_edges = build_edge_index_and_attr_mpnn(self.robot, self.batch_size, self.device)
@@ -151,9 +152,10 @@ class BaseGNN(torch.nn.Module):
 
         result = self.one_step(graph=graph, u_vector=h, num_messages=self.num_messages, decoding=True)
         
-        num_acts = 19 if self.robot == "h1" else 37
+        num_acts = self.num_nodes
         
         return result.view(batch_size, num_acts)
+    
     def one_step(
         self,
         graph: Data,

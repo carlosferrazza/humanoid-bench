@@ -26,7 +26,8 @@ from fast_td3.fast_td3_utils import (
     SimpleReplayBufferGNN,
     save_params,
 )
-from fast_td3 import Critic, ActorGNN, Actor, ActorMPNN
+from fast_td3 import Critic 
+from fast_td3.actors import ActorEGNN, Actor, ActorMPNN
 from fast_td3.hyperparams import HumanoidBenchArgs
 import argparse
 from fast_td3.environments.humanoid_bench_env import HumanoidBenchEnv
@@ -169,7 +170,7 @@ def main():
 
     if terminal_args["actor"] == "egnn": 
         # Actor setup
-        actor = ActorGNN(
+        actor = ActorEGNN(
             n_obs=n_obs,
             n_act=n_act,
             num_envs=args.num_envs,
@@ -183,7 +184,7 @@ def main():
         )
 
         # the twin actor
-        actor_detach = ActorGNN(
+        actor_detach = ActorEGNN(
             n_obs=n_obs,
             n_act=n_act,
             num_envs=args.num_envs,
@@ -540,7 +541,7 @@ def main():
         critic_grad_norm = torch.nn.utils.clip_grad_norm_(
             qnet.parameters(),
             max_norm=(
-                args.max_critic_grad_norm if args.max_critic_grad_norm > 0 else float("inf")
+                args.max_grad_norm if args.max_grad_norm > 0 else float("inf")
             ),
         )
         scaler.step(q_optimizer)
@@ -599,7 +600,7 @@ def main():
         actor_grad_norm = torch.nn.utils.clip_grad_norm_(
             actor.parameters(),
             max_norm=(
-                args.max_actor_grad_norm if args.max_actor_grad_norm > 0 else float("inf")
+                args.max_grad_norm if args.max_grad_norm > 0 else float("inf")
             ),
         )
         scaler.step(actor_optimizer)

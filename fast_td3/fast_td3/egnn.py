@@ -125,8 +125,9 @@ class EGNN(nn.Module):
         in_edge_nf,
         device,
         batch_size,
-        act_fn=nn.SiLU(),
-        n_layers=4,
+        act_fn,
+        n_layers,
+        robot,
         residual=True,
         attention=False,
         normalize=False,
@@ -157,7 +158,10 @@ class EGNN(nn.Module):
         self.hidden_nf = hidden_nf
         self.device = device
         self.n_layers = n_layers
-        self.embedding_in = nn.Linear(in_node_nf, self.hidden_nf, device=device)
+        self.embedding_in = nn.Sequential(
+            nn.Linear(in_node_nf, self.hidden_nf, device=device), 
+            act_fn
+        )
         self.embedding_out = nn.Sequential(
             nn.Linear(self.hidden_nf, out_node_nf, device=device),
             nn.Tanh(),
@@ -179,47 +183,27 @@ class EGNN(nn.Module):
                 ),
             )
         self.to(self.device)
-
-        edge_index, edge_attr = build_edge_index_and_attr("h1", self.batch_size, self.device)
-        self.register_buffer("edge_index", edge_index)
-        self.register_buffer("edge_attr", edge_attr)
+        self.robot = robot
+        
+        edge_index, edge_attr, num_nodes, num_edges = build_edge_index_and_attr(self.robot, self.batch_size, self.device)
+        self.edge_index = edge_index
+        self.edge_attr = edge_attr
+        self.num_nodes = num_nodes
+        self.num_edges = num_edges
 
     def forward(self, h, x, edges, edge_attr):
-        batch_size = int(h.shape[0] / (19))
-
-        # Debug: Check for NaNs/Infs in input tensors
-        # if torch.isnan(h).any() or torch.isinf(h).any():
-        #     print("[DEBUG] NaN or Inf detected in input h", h)
-        # if torch.isnan(x).any() or torch.isinf(x).any():
-        #     print("[DEBUG] NaN or Inf detected in input x", x)
-        # if edge_attr is not None and (torch.isnan(edge_attr).any() or torch.isinf(edge_attr).any()):
-        #     print("[DEBUG] NaN or Inf detected in input edge_attr", edge_attr)
+        batch_size = int(h.shape[0] / self.num_nodes)
 
         h = self.embedding_in(h)
         for i in range(0, self.n_layers):
             h, x, _ = self._modules["gcl_%d" % i](h, edges, x, edge_attr=edge_attr)
-            # Debug: Check for NaNs/Infs after each layer
-            # if torch.isnan(h).any() or torch.isinf(h).any():
-            #     print(f"[DEBUG] NaN or Inf detected in h after gcl_{i}", h)
-            # if torch.isnan(x).any() or torch.isinf(x).any():
-            #     print(f"[DEBUG] NaN or Inf detected in x after gcl_{i}", x)
 
         h = self.embedding_out(h)
-
-        h = h.view(batch_size, 19)
-
-        # Debug: Check for NaNs/Infs in output
-        # if torch.isnan(h).any() or torch.isinf(h).any():
-        #     print("[DEBUG] NaN or Inf detected in output h", h)
+        h = h.view(batch_size, self.num_nodes)
 
         return h
 
     def build_batched_egnn_input(self, obs: torch.tensor, xpos: torch.tensor):
-        # if torch.isnan(obs).any() or torch.isinf(obs).any():
-        #     raise ValueError("Input observation contains NaN or Inf values.")
-        # if torch.isnan(xpos).any() or torch.isinf(xpos).any():
-        #     raise ValueError("Input xpos contains NaN or Inf values.")
-
         batch_size = obs.shape[0]
         if batch_size == self.batch_size:
             edge_index = self.edge_index
@@ -228,19 +212,26 @@ class EGNN(nn.Module):
             assert (
                 batch_size <= self.batch_size
             ), "Batch size exceeds the maximum batch size."
-            edge_index = [t[: batch_size * 18].clone() for t in self.edge_index]
-            edge_attr = self.edge_attr[: batch_size * 18].clone()
+            edge_index = [t[: batch_size * self.num_edges].clone() for t in self.edge_index]
+            edge_attr = self.edge_attr[: batch_size * self.num_edges].clone()
 
         x = xpos[:, 1:].reshape(-1, 3)  # (B*N, 3)
 
-        h = torch.stack([obs[:, 32:].reshape(-1, 1), obs[:, 7:26].reshape(-1, 1)], dim=1).squeeze(2)  # (B*N, 2)
+        if self.robot == "h1":
+            h = torch.stack(
+                [obs[:, 32:].reshape(-1, 1), obs[:, 7:26].reshape(-1, 1)], dim=1
+            ).squeeze(
+                2
+            )  # (B*N, 2)
+        elif self.robot == "g1":
+                h = torch.stack(
+                [obs[:, 50:].reshape(-1, 1), obs[:, 7:44].reshape(-1, 1)], dim=1
+            ).squeeze(
+                2
+            )  # (B*N, 2)
 
-        # if torch.isnan(x).any() or torch.isinf(x).any():
-        #     print("NaN or Inf detected in input x")
-        # if torch.isnan(h).any() or torch.isinf(h).any():
-        #     print("NaN or Inf detected in input h")
 
-        return h, x, edge_index, edge_attr
+        return h, x, edge_index, None
 
 
 def unsorted_segment_sum(data, segment_ids, num_segments):

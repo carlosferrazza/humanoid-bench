@@ -1,0 +1,18 @@
+gymnasium<1.0.0
+jax-jumpy==1.0.0 ; python_version >= "3.8" and python_version < "3.11"
+matplotlib
+moviepy
+numpy<2.0
+pandas
+protobuf
+pygame
+stable-baselines3
+tqdm
+wandb
+torchrl==0.7.2
+tensordict==0.7.2
+tyro
+loguru
+torch==2.6.0 --index-url https://download.pytorch.org/whl/cu124
+torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu124
+torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu124

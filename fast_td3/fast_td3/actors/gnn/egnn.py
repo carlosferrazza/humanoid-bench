@@ -155,6 +155,7 @@ class EGNN(nn.Module):
         """
 
         super(EGNN, self).__init__()
+        self.in_edge_nf = in_edge_nf
         self.hidden_nf = hidden_nf
         self.device = device
         self.n_layers = n_layers
@@ -230,6 +231,8 @@ class EGNN(nn.Module):
                 2
             )  # (B*N, 2)
 
+        if self.in_edge_nf == 0:
+            edge_attr = None
 
         return h, x, edge_index, edge_attr
 

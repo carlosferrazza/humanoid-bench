@@ -30,7 +30,7 @@ from fast_td3.fast_td3_utils import (
     save_params,
 )
 from fast_td3 import Critic
-from fast_td3.actors import ActorEGNN, Actor, ActorMPNN
+from fast_td3.actors import ActorEGNN, Actor, ActorMPNN, ActorHEPI
 from fast_td3.hyperparams import HumanoidBenchArgs
 import argparse
 from fast_td3.environments.humanoid_bench_env import HumanoidBenchEnv
@@ -41,6 +41,68 @@ import tempfile
 import os
 
 
+def create_actor(actor_type, n_obs, n_act, num_envs, batch_size, device, init_scale, model_kwargs, actor_hidden_dim=None):
+    """
+    Helper function to create an actor based on the specified type.
+    
+    Args:
+        actor_type (str): Type of actor ("egnn", "mlp", "mpnn", "hepi")
+        n_obs (int): Number of observations
+        n_act (int): Number of actions
+        num_envs (int): Number of environments
+        batch_size (int): Batch size
+        device (torch.device): Device to place the actor on
+        init_scale (float): Initialization scale
+        model_kwargs (dict): Additional model parameters
+        actor_hidden_dim (int, optional): Hidden dimension for MLP actor
+        
+    Returns:
+        Actor: The created actor instance
+        
+    Raises:
+        ValueError: If actor_type is not supported
+    """
+    if actor_type == "egnn":
+        return ActorEGNN(
+            n_obs=n_obs,
+            n_act=n_act,
+            num_envs=num_envs,
+            batch_size=batch_size,
+            device=device,
+            init_scale=init_scale,
+            **model_kwargs,
+        )
+    elif actor_type == "mlp":
+        return Actor(
+            n_obs=n_obs,
+            n_act=n_act,
+            num_envs=num_envs,
+            device=device,
+            init_scale=init_scale,
+            hidden_dim=actor_hidden_dim,
+        )
+    elif actor_type == "mpnn":
+        return ActorMPNN(
+            n_obs=n_obs,
+            n_act=n_act,
+            num_envs=num_envs,
+            batch_size=batch_size,
+            device=device,
+            **model_kwargs,
+        )
+    elif actor_type == "hepi":
+        return ActorHEPI(
+            n_obs=n_obs,
+            n_act=n_act,
+            num_envs=num_envs,
+            batch_size=batch_size,
+            device=device,
+            **model_kwargs,
+        )
+    else:
+        raise ValueError(f"Unsupported actor type: {actor_type}. Supported types are: egnn, mlp, mpnn, hepi")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Train humanoid using FastTD3")
     parser.add_argument(
@@ -48,7 +110,7 @@ def main():
         type=str,
         default="egnn",
         help="The kind of actor to use.",
-        choices=["egnn", "mlp", "mpnn"],
+        choices=["egnn", "mlp", "mpnn", "hepi"],
     )
     parser.add_argument("--env_name", type=str, default="h1-stand-v0")
     parser.add_argument(
@@ -117,11 +179,12 @@ def main():
     if use_wandb:
         wandb.init(
             entity="thuaduc24042001-technical-university-of-munich",
-            project="FastTD3 - experiments",
+            project="FastTD3 - new",
             name=run_name,
             config=vars(args),
             save_code=True,
         )
+        wandb.save("fast_td3/robots/h1.py")
 
     amp_enabled = args.amp and args.cuda and torch.cuda.is_available()
     amp_device_type = (
@@ -183,63 +246,29 @@ def main():
     normalize_critic_obs = critic_obs_normalizer.forward
     normalize_xpos = xpos_normalizer.forward
 
-    if terminal_args["actor"] == "egnn":
-        actor = ActorEGNN(
-            n_obs=n_obs,
-            n_act=n_act,
-            num_envs=args.num_envs,
-            batch_size=args.batch_size,
-            device=device,
-            init_scale=args.init_scale,
-            **model_kwargs,
-        )
-
-        actor_detach = ActorEGNN(
-            n_obs=n_obs,
-            n_act=n_act,
-            num_envs=args.num_envs,
-            batch_size=args.batch_size,
-            device=device,
-            init_scale=args.init_scale,
-            **model_kwargs,
-        )
-    elif terminal_args["actor"] == "mlp":
-        actor = Actor(
-            n_obs=n_obs,
-            n_act=n_act,
-            num_envs=args.num_envs,
-            device=device,
-            init_scale=args.init_scale,
-            hidden_dim=args.actor_hidden_dim,
-        )
-
-        actor_detach = Actor(
-            n_obs=n_obs,
-            n_act=n_act,
-            num_envs=args.num_envs,
-            device=device,
-            init_scale=args.init_scale,
-            hidden_dim=args.actor_hidden_dim,
-        )
-    elif terminal_args["actor"] == "mpnn":
-        actor = ActorMPNN(
-            n_obs=n_obs,
-            n_act=n_act,
-            num_envs=args.num_envs,
-            batch_size=args.batch_size,
-            device=device,
-            **model_kwargs,
-        )
-
-        # the twin actor
-        actor_detach = ActorMPNN(
-            n_obs=n_obs,
-            n_act=n_act,
-            num_envs=args.num_envs,
-            batch_size=args.batch_size,
-            device=device,
-            **model_kwargs,
-        )
+    # Create the main actor and actor detach (twin actor)
+    actor = create_actor(
+        actor_type=terminal_args["actor"],
+        n_obs=n_obs,
+        n_act=n_act,
+        num_envs=args.num_envs,
+        batch_size=args.batch_size,
+        device=device,
+        init_scale=args.init_scale,
+        model_kwargs=model_kwargs,
+        actor_hidden_dim=args.actor_hidden_dim,
+    )
+    actor_detach = create_actor(
+        actor_type=terminal_args["actor"],
+        n_obs=n_obs,
+        n_act=n_act,
+        num_envs=args.num_envs,
+        batch_size=args.batch_size,
+        device=device,
+        init_scale=args.init_scale,
+        model_kwargs=model_kwargs,
+        actor_hidden_dim=args.actor_hidden_dim,
+    )
 
     print(f"Actor num of parameters: {sum(p.numel() for p in actor.parameters())}")
     for name in actor.named_parameters():

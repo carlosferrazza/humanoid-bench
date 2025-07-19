@@ -1,6 +1,6 @@
 {
-    "hidden_dim": 96,
-    "latent_dim": 96,
+    "hidden_dim": 64,
+    "latent_dim": 64,
     "n_node_feat": 2,
     "n_edge_feat": 1,
     "num_message": 2,

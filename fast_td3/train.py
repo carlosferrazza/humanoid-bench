@@ -30,7 +30,7 @@ from fast_td3.fast_td3_utils import (
     save_params,
 )
 from fast_td3 import Critic
-from fast_td3.actors import ActorEGNN, Actor, ActorMPNN, ActorHEPI
+from fast_td3.actors import ActorEGNN, Actor, ActorMPNN, ActorHEPI, ActorAEGNN
 from fast_td3.hyperparams import HumanoidBenchArgs
 import argparse
 from fast_td3.environments.humanoid_bench_env import HumanoidBenchEnv
@@ -99,6 +99,16 @@ def create_actor(actor_type, n_obs, n_act, num_envs, batch_size, device, init_sc
             device=device,
             **model_kwargs,
         )
+    elif actor_type == "aegnn":
+        return ActorAEGNN(
+            n_obs=n_obs,
+            n_act=n_act,
+            num_envs=num_envs,
+            batch_size=batch_size,
+            device=device,
+            init_scale=init_scale,
+            **model_kwargs,
+        )
     else:
         raise ValueError(f"Unsupported actor type: {actor_type}. Supported types are: egnn, mlp, mpnn, hepi")
 
@@ -110,7 +120,7 @@ def main():
         type=str,
         default="egnn",
         help="The kind of actor to use.",
-        choices=["egnn", "mlp", "mpnn", "hepi"],
+        choices=["egnn", "mlp", "mpnn", "hepi", "aegnn"],
     )
     parser.add_argument("--env_name", type=str, default="h1-stand-v0")
     parser.add_argument(
@@ -140,6 +150,9 @@ def main():
     parser.add_argument(
         "--batch_size", type=int, default=8192, help="Batch size for training."
     )
+    parser.add_argument("--wandb", action="store_true", help="Enable wandb logging")
+    parser.add_argument("--no-wandb", dest="wandb", action="store_false", help="Disable wandb logging")
+    parser.set_defaults(wandb=True)
     parser.add_argument("--checkpoint_path", type=str)
     parser.add_argument("--model_kwargs", type=str, default=None,
                         help='Additional model parameters (as defined in the class) in JSON format (path to the file).' \
@@ -165,7 +178,7 @@ def main():
 
     print(f"Training with args: {terminal_args}")
 
-    use_wandb = True
+    use_wandb = terminal_args["wandb"]
     uid = uuid.uuid4().hex[:6]  # 6-char unique ID
 
     run_name = (

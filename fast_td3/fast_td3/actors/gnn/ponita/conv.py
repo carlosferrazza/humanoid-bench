@@ -149,7 +149,7 @@ class FiberBundleConv(torch_geometric.nn.MessagePassing):
         return out
 
     def callibrate(self, std_in, std_1, std_2):
-        print("Callibrating...")
+        # print("Callibrating...")  # Commented out for performance
         with torch.no_grad():
             self.kernel.weight.data = self.kernel.weight.data * std_in / std_1
             if self.separable:

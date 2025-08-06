@@ -1,58 +1,49 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch_geometric.data import Data
+from torch_geometric.transforms import RadiusGraph
 
-from fast_td3.actors.gnn.egnn import EGNN
+from fast_td3.actors.ponita.models.ponita import Ponita
 
-class ActorEGNN(nn.Module):
+
+class ActorPONITA(nn.Module):
     def __init__(
         self,
         n_obs: int,
         n_act: int, 
         num_envs: int,
-        init_scale: float,
-        hidden_dim: int,
         batch_size: int,
         device: torch.device,
-        n_layers: int,
-        act_fn: str,
         robot: str = "h1",
         std_min: float = 0.05,
         std_max: float = 0.8,
-        n_node_feat: int = 2,
+        n_node_feat: int = 3,
         n_edge_feat: int = 1,
-        attention: bool = False,
-        coords_agg: str = "mean",
-        normalize: bool = False,
+        hidden_dim: int = 128, 
+        output_dim: int = 1,
+        output_dim_vec: int = 1,
+        num_layers: int = 4,
+        num_ori: int = 10,
+        task_level: str = "graph",
+        multiple_readouts: bool = True
     ):
         super().__init__()
         self.n_act = n_act
         self.n_envs = num_envs
+        self.device = device
 
-        match act_fn:
-            case "leaky_relu":
-                act_fn = nn.LeakyReLU()
-            case "silu":
-                act_fn = nn.SiLU()
-            case "relu":
-                act_fn = nn.ReLU()
-            case _:
-                raise ValueError(f"Unknown activation function: {act_fn}")
-
-        # EGNN for message passing
-        self.egnn = EGNN(
-            in_node_nf=n_node_feat,
-            hidden_nf=hidden_dim,
-            out_node_nf=1,
-            in_edge_nf=n_edge_feat,
-            batch_size=batch_size,
+        self.ponita = Ponita(
+            input_dim=n_node_feat,
+            hidden_dim=hidden_dim,
+            output_dim=n_act,
+            num_layers=num_layers,
             device=device,
-            act_fn=act_fn,
-            n_layers=n_layers,
             robot=robot,
-            attention=attention,
-            coords_agg=coords_agg,
-            normalize=normalize,
+            batch_size=batch_size,
+            num_ori=num_ori,
+            task_level=task_level,
+            multiple_readouts=multiple_readouts
         )
 
         # Initialize noise parameters
@@ -64,11 +55,11 @@ class ActorEGNN(nn.Module):
         self.register_buffer("std_max", torch.as_tensor(std_max, device=device))
 
     def forward(self, obs, xpos) -> torch.Tensor:
-        h, x, edges, edge_attr = self.egnn.build_batched_egnn_input(obs, xpos)
+        h, pos, edge_index, batch = self.ponita.build_batched_ponita_input(obs, xpos)
+        data = Data(x=h, pos=pos, edge_index=edge_index, batch=batch)
+        output_scalar = self.ponita.forward(data)
 
-        result = self.egnn(h, x, edges, edge_attr)
-
-        return result
+        return output_scalar
 
     def explore(
         self, obs: torch.Tensor, xpos: torch.Tensor, dones: torch.Tensor = None, deterministic: bool = False
@@ -92,4 +83,3 @@ class ActorEGNN(nn.Module):
 
         noise = torch.randn_like(act) * self.noise_scales
         return act + noise
-

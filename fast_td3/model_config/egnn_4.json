@@ -1,0 +1,11 @@
+{
+    "hidden_dim": 88,
+    "act_fn": "relu",
+    "n_edge_feat": 1,
+    "n_layers": 4,
+    "attention": true,
+    "coords_agg": "sum",
+    "tanh": true,
+    "use_edge_feat": true,
+    "normalize": true
+}

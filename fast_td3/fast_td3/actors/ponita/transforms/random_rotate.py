@@ -1,7 +1,8 @@
 import torch
 from torch_geometric.transforms import BaseTransform
-from ponita.geometry.rotation import random_matrix as random_so3_matrix
-from ponita.geometry.rotation_2d import random_so2_matrix
+
+from fast_td3.actors.ponita.geometry.rotation import random_matrix as random_so3_matrix
+from fast_td3.actors.ponita.geometry.rotation_2d import random_so2_matrix
 
 class RandomRotate(BaseTransform):
     """

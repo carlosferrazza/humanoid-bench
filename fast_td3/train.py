@@ -30,7 +30,14 @@ from fast_td3.fast_td3_utils import (
     save_params,
 )
 from fast_td3 import Critic
-from fast_td3.actors import ActorEGNN, Actor, ActorMPNN, ActorHEPI, ActorAEGNN
+from fast_td3.actors import (
+    ActorEGNN,
+    Actor,
+    ActorMPNN,
+    ActorHEPI,
+    ActorAEGNN,
+    ActorPONITA,
+)
 from fast_td3.hyperparams import HumanoidBenchArgs
 import argparse
 from fast_td3.environments.humanoid_bench_env import HumanoidBenchEnv
@@ -41,10 +48,20 @@ import tempfile
 import os
 
 
-def create_actor(actor_type, n_obs, n_act, num_envs, batch_size, device, init_scale, model_kwargs, actor_hidden_dim=None):
+def create_actor(
+    actor_type,
+    n_obs,
+    n_act,
+    num_envs,
+    batch_size,
+    device,
+    init_scale,
+    model_kwargs,
+    actor_hidden_dim=None,
+):
     """
     Helper function to create an actor based on the specified type.
-    
+
     Args:
         actor_type (str): Type of actor ("egnn", "mlp", "mpnn", "hepi")
         n_obs (int): Number of observations
@@ -55,10 +72,10 @@ def create_actor(actor_type, n_obs, n_act, num_envs, batch_size, device, init_sc
         init_scale (float): Initialization scale
         model_kwargs (dict): Additional model parameters
         actor_hidden_dim (int, optional): Hidden dimension for MLP actor
-        
+
     Returns:
         Actor: The created actor instance
-        
+
     Raises:
         ValueError: If actor_type is not supported
     """
@@ -109,8 +126,20 @@ def create_actor(actor_type, n_obs, n_act, num_envs, batch_size, device, init_sc
             init_scale=init_scale,
             **model_kwargs,
         )
+    elif actor_type == "ponita":
+        return ActorPONITA(
+            n_obs=n_obs,
+            n_act=n_act,
+            num_envs=num_envs,
+            batch_size=batch_size,
+            device=device,
+            robot="h1",
+            **model_kwargs,
+        )
     else:
-        raise ValueError(f"Unsupported actor type: {actor_type}. Supported types are: egnn, mlp, mpnn, hepi")
+        raise ValueError(
+            f"Unsupported actor type: {actor_type}. Supported types are: egnn, mlp, mpnn, hepi"
+        )
 
 
 def main():
@@ -120,7 +149,7 @@ def main():
         type=str,
         default="egnn",
         help="The kind of actor to use.",
-        choices=["egnn", "mlp", "mpnn", "hepi", "aegnn"],
+        choices=["egnn", "mlp", "mpnn", "hepi", "aegnn", "ponita"],
     )
     parser.add_argument("--env_name", type=str, default="h1-stand-v0")
     parser.add_argument(
@@ -151,12 +180,18 @@ def main():
         "--batch_size", type=int, default=8192, help="Batch size for training."
     )
     parser.add_argument("--wandb", action="store_true", help="Enable wandb logging")
-    parser.add_argument("--no-wandb", dest="wandb", action="store_false", help="Disable wandb logging")
+    parser.add_argument(
+        "--no-wandb", dest="wandb", action="store_false", help="Disable wandb logging"
+    )
     parser.set_defaults(wandb=True)
     parser.add_argument("--checkpoint_path", type=str)
-    parser.add_argument("--model_kwargs", type=str, default=None,
-                        help='Additional model parameters (as defined in the class) in JSON format (path to the file).' \
-                        'If not provided, defaults params will be used.')
+    parser.add_argument(
+        "--model_kwargs",
+        type=str,
+        default=None,
+        help="Additional model parameters (as defined in the class) in JSON format (path to the file)."
+        "If not provided, defaults params will be used.",
+    )
 
     terminal_args = vars(parser.parse_args())
 
@@ -196,6 +231,10 @@ def main():
             name=run_name,
             config=vars(args),
             save_code=True,
+            settings=wandb.Settings(
+                _disable_stats=True,  # disables CPU/memory/disk/GPU monitoring
+                _disable_meta=True,  # disables system metadata collection
+            ),
         )
         wandb.save("fast_td3/robots/h1.py")
 
@@ -282,6 +321,21 @@ def main():
         model_kwargs=model_kwargs,
         actor_hidden_dim=args.actor_hidden_dim,
     )
+
+    # For PONITA actors, we need to initialize LazyLinear layers before copying parameters
+    if terminal_args["actor"] == "ponita":
+        # Get initial observations to initialize the LazyLinear layers
+        if envs.asymmetric_obs:
+            init_obs, init_critic_obs = envs.reset_with_critic_obs()
+            init_critic_obs = torch.as_tensor(
+                init_critic_obs, device=device, dtype=torch.float
+            )
+        else:
+            init_obs, init_xpos = envs.reset()
+
+        # Initialize the main actor's LazyLinear layers with a dummy forward pass
+        with torch.no_grad():
+            _ = actor(init_obs.to(device), init_xpos.to(device))
 
     print(f"Actor num of parameters: {sum(p.numel() for p in actor.parameters())}")
     for name in actor.named_parameters():
@@ -719,7 +773,6 @@ def main():
         obs, xpos = envs.reset()
     pbar = tqdm.tqdm(total=args.total_timesteps, initial=global_step)
     dones = None
-    global_step = 0
 
     while global_step < args.total_timesteps:
         logs_dict = TensorDict()  # Dictionary to store training metrics for this step
@@ -898,7 +951,6 @@ def main():
                 if use_wandb:
                     wandb.log(
                         {
-                            "frame": global_step * args.num_envs,
                             **logs,
                         },
                         step=global_step,

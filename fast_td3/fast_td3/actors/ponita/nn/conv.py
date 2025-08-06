@@ -6,7 +6,7 @@ from typing import Optional
 class Conv(torch_geometric.nn.MessagePassing):
     """
     """
-    def __init__(self, in_channels, out_channels, attr_dim, bias=True, aggr="add", groups=1):
+    def __init__(self, in_channels, out_channels, attr_dim, device, bias=True, aggr="add", groups=1):
         super().__init__(node_dim=0, aggr=aggr)
         
         # Check arguments
@@ -20,15 +20,15 @@ class Conv(torch_geometric.nn.MessagePassing):
             assert ValueError('Invalid option for groups, should be groups=1 or groups=in_channels=out_channels (depth-wise separable)')
         
         # Construct kernel and bias
-        self.kernel = torch.nn.Linear(attr_dim, int(in_channels * out_channels / groups), bias=False)
+        self.kernel = torch.nn.Linear(attr_dim, int(in_channels * out_channels / groups), bias=False).to(device)
         if bias:
-            self.bias = torch.nn.Parameter(torch.empty(out_channels))
+            self.bias = torch.nn.Parameter(torch.empty(out_channels)).to(device)
             self.bias.data.zero_()
         else:
             self.register_parameter('bias', None)
 
         # Automatic re-initialization
-        self.register_buffer("callibrated", torch.tensor(False))
+        self.register_buffer("callibrated", torch.tensor(False).to(device))
         
     def forward(self, x, edge_index, edge_attr, **kwargs):
         """
@@ -56,7 +56,7 @@ class Conv(torch_geometric.nn.MessagePassing):
             return torch.einsum('boi,bi->bo', kernel.unflatten(-1, (self.out_channels, self.in_channels)), x_j)
     
     def callibrate(self, std_in, std_out):
-        print('Callibrating...')
+        # print('Callibrating...')  # Commented out for performance
         with torch.no_grad():
             self.kernel.weight.data = self.kernel.weight.data * std_in/std_out
             self.callibrated = ~self.callibrated
@@ -65,7 +65,7 @@ class Conv(torch_geometric.nn.MessagePassing):
 class FiberBundleConv(torch_geometric.nn.MessagePassing):
     """
     """
-    def __init__(self, in_channels, out_channels, attr_dim, bias=True, aggr="add", separable=True, groups=1):
+    def __init__(self, in_channels, out_channels, attr_dim, device, bias=True, aggr="add", separable=True, groups=1):
         super().__init__(node_dim=0, aggr=aggr)
 
         # Check arguments
@@ -81,20 +81,20 @@ class FiberBundleConv(torch_geometric.nn.MessagePassing):
         # Construct kernels
         self.separable = separable
         if self.separable:
-            self.kernel = torch.nn.Linear(attr_dim, in_channels, bias=False)
-            self.fiber_kernel = torch.nn.Linear(attr_dim, int(in_channels * out_channels / groups), bias=False)
+            self.kernel = torch.nn.Linear(attr_dim, in_channels, bias=False).to(device)
+            self.fiber_kernel = torch.nn.Linear(attr_dim, int(in_channels * out_channels / groups), bias=False).to(device)
         else:
-            self.kernel = torch.nn.Linear(attr_dim, int(in_channels * out_channels / groups), bias=False)
+            self.kernel = torch.nn.Linear(attr_dim, int(in_channels * out_channels / groups), bias=False).to(device)
         
         # Construct bias
         if bias:
-            self.bias = torch.nn.Parameter(torch.empty(out_channels))
+            self.bias = torch.nn.Parameter(torch.empty(out_channels)).to(device)
             self.bias.data.zero_()
         else:
             self.register_parameter('bias', None)
         
         # Automatic re-initialization
-        self.register_buffer("callibrated", torch.tensor(False))
+        self.register_buffer("callibrated", torch.tensor(False).to(device))
         
     def forward(self, x, edge_index, edge_attr, fiber_attr=None, **kwargs):
         """
@@ -132,7 +132,7 @@ class FiberBundleConv(torch_geometric.nn.MessagePassing):
                 return torch.einsum('bopdc,boc->bpd', kernel.unflatten(-1, (self.out_channels, self.in_channels)), x_j)
     
     def callibrate(self, std_in, std_1, std_2):
-        print('Callibrating...')
+        # print('Callibrating...')  # Commented out for performance
         with torch.no_grad():
             self.kernel.weight.data = self.kernel.weight.data * std_in/std_1
             if self.separable:

@@ -7,6 +7,8 @@ from typing import Optional
 
 import math
 
+from fast_td3.skeleton_builder import build_edge_index_and_node_attr
+
 
 def scatter_add(src, index, dim_size):
     out_shape = [dim_size] + list(src.shape[1:])
@@ -253,6 +255,9 @@ class Ponita(nn.Module):
         hidden_dim,
         output_dim,
         num_layers,
+        batch_size,
+        device,
+        robot="h1",
         output_dim_vec=0,
         dim=3,
         num_ori=20,
@@ -261,7 +266,7 @@ class Ponita(nn.Module):
         widening_factor=4,
         layer_scale=None,
         task_level="graph",
-        multiple_readouts=False,
+        multiple_readouts=True,
         last_feature_conditioning=False,
         attention=False,
         only_upper_hemisphere=False,
@@ -273,11 +278,14 @@ class Ponita(nn.Module):
         self.output_dim = output_dim
         self.output_dim_vec = output_dim_vec
         self.num_ori = num_ori
+        self.batch_size = batch_size
+        self.robot = robot
+        self.device = device
 
         self.last_feature_conditioning = last_feature_conditioning
         self.register_buffer(
             "ori_grid",
-            GridGenerator(dim, num_ori, steps=1000, only_upper_hemisphere=only_upper_hemisphere)(),
+            GridGenerator(dim, num_ori, steps=1000, only_upper_hemisphere=only_upper_hemisphere, device=device)().to(device),
         )
 
         # Input output settings
@@ -326,6 +334,23 @@ class Ponita(nn.Module):
             else:
                 self.read_out_layers.append(None)
 
+        edge_index, node_attr, num_nodes, num_edges = build_edge_index_and_node_attr(
+            self.robot, self.batch_size, self.device
+        )
+        self.edge_index = edge_index
+        self.node_attr = node_attr
+        self.num_nodes = num_nodes
+        self.num_edges = num_edges
+        self.batch = torch.repeat_interleave(torch.arange(batch_size, device=self.device), 19)
+        
+        # Cache for common batch sizes (optional optimization)
+        self._batch_cache = {}
+
+        # Move entire model to the specified device
+        self.to(device)
+
+        
+
     def compute_invariants(self, ori_grid, pos, edge_index):
         pos_send, pos_receive = pos[edge_index[0]], pos[edge_index[1]]  # [num_edges, 3]
         rel_pos = pos_send - pos_receive  # [num_edges, 3]
@@ -368,6 +393,48 @@ class Ponita(nn.Module):
             x = interaction_layer(x, kernel_basis, fiber_kernel_basis, edge_index)
         return x
 
+    def build_batched_ponita_input(self, obs: torch.Tensor, xpos: torch.Tensor):
+        batch_size = obs.shape[0]
+
+        if batch_size == self.batch_size:
+            edge_index = self.edge_index
+            node_attr = self.node_attr
+            batch = self.batch
+        else:
+            assert (
+                batch_size <= self.batch_size
+            ), "Batch size exceeds the maximum batch size."
+            
+            # Use cache for common batch sizes
+            if batch_size in self._batch_cache:
+                edge_index, node_attr, batch = self._batch_cache[batch_size]
+            else:
+                # Use slicing instead of list comprehension + clone for better performance
+                num_edges_total = batch_size * self.num_edges
+                edge_index = torch.stack([
+                    self.edge_index[0][:num_edges_total], 
+                    self.edge_index[1][:num_edges_total]
+                ], dim=0)
+                node_attr = self.node_attr[:batch_size * self.num_nodes]
+                batch = torch.repeat_interleave(torch.arange(batch_size, device=self.device), 19)
+                
+                # Cache if batch size is reasonable (avoid memory bloat)
+                if len(self._batch_cache) < 10:  # Limit cache size
+                    self._batch_cache[batch_size] = (edge_index, node_attr, batch)
+
+        # Flatten node positions (B*N, 3) - already efficient
+        x = xpos[:, 1:].reshape(-1, 3)
+
+        if self.robot == "h1":
+            h = torch.stack(
+                [obs[:, 32:].reshape(-1, 1), obs[:, 7:26].reshape(-1, 1), node_attr], dim=1
+            ).squeeze(2)  # (B*N, 3)
+        elif self.robot == "g1":
+            h = torch.stack(
+                [obs[:, 50:].reshape(-1, 1), obs[:, 7:44].reshape(-1, 1), node_attr], dim=1
+            ).squeeze(2)  # (B*N, 3)
+
+        return h, x, edge_index, batch
 
 def main():
     from geometry_rl.modules.pyg_models.ponita.utils.to_from_sphere import (

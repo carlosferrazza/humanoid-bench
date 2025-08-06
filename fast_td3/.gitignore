@@ -3,3 +3,4 @@ wandb
 *.pyc
 .ipynb_checkpoints
 fast_td3.egg-info/
+!fast_td3/actors/ponita/models

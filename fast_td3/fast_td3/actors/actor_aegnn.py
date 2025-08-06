@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from fast_td3.actors.gnn.egnn import EGNN
+from fast_td3.actors.gnn.aegnn import AngleEGNN
 
-class ActorEGNN(nn.Module):
+class ActorAEGNN(nn.Module):
     def __init__(
         self,
         n_obs: int,
@@ -19,11 +19,8 @@ class ActorEGNN(nn.Module):
         robot: str = "h1",
         std_min: float = 0.05,
         std_max: float = 0.8,
-        n_node_feat: int = 2,
+        n_node_feat: int = 1,
         n_edge_feat: int = 1,
-        attention: bool = False,
-        coords_agg: str = "mean",
-        normalize: bool = False,
     ):
         super().__init__()
         self.n_act = n_act
@@ -39,8 +36,8 @@ class ActorEGNN(nn.Module):
             case _:
                 raise ValueError(f"Unknown activation function: {act_fn}")
 
-        # EGNN for message passing
-        self.egnn = EGNN(
+        # AngleEGNN for message passing
+        self.aegnn = AngleEGNN(
             in_node_nf=n_node_feat,
             hidden_nf=hidden_dim,
             out_node_nf=1,
@@ -49,10 +46,7 @@ class ActorEGNN(nn.Module):
             device=device,
             act_fn=act_fn,
             n_layers=n_layers,
-            robot=robot,
-            attention=attention,
-            coords_agg=coords_agg,
-            normalize=normalize,
+            robot=robot
         )
 
         # Initialize noise parameters
@@ -64,9 +58,9 @@ class ActorEGNN(nn.Module):
         self.register_buffer("std_max", torch.as_tensor(std_max, device=device))
 
     def forward(self, obs, xpos) -> torch.Tensor:
-        h, x, edges, edge_attr = self.egnn.build_batched_egnn_input(obs, xpos)
+        h, x, edges, edge_attr = self.aegnn.build_batched_angle_input(obs, xpos)
 
-        result = self.egnn(h, x, edges, edge_attr)
+        result = self.aegnn(h, x, edges, edge_attr)
 
         return result
 

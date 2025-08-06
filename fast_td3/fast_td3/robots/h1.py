@@ -76,6 +76,28 @@ class H1:
         8,  # (right_shoulder_yaw, right_elbow)            - right_arm
     ]
 
+    node_type_encoding = [
+        0,  # left_hip_yaw
+        1,  # left_hip_roll,
+        2,  # left_hip_pitch
+        3,  # left_knee
+        4,  # left_ankle
+        0,  # right_hip_yaw
+        1,  # right_hip_roll
+        2,  # right_hip_pitch
+        3,  # right_knee
+        4,  # right_ankle
+        5,  # torso
+        6,  # left_shoulder_pitch
+        7,  # left_shoulder_roll
+        8,  # left_shoulder_yaw
+        9,  # left_elbow
+        6,  # right_shoulder_pitch
+        7,  # right_shoulder_roll
+        8,  # right_shoulder_yaw
+        9,  # right_elbow
+    ]
+
     num_nodes = len(joint_dict)
     num_edges = len(edge_list)
 

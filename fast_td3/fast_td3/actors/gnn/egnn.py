@@ -262,7 +262,6 @@ class EGNN(nn.Module):
             )  # (B*N, 2)
         elif self.robot == "g1":
             h = torch.stack(
-            h = torch.stack(
                 [obs[:, 50:].reshape(-1, 1), obs[:, 7:44].reshape(-1, 1)], dim=1
             ).squeeze(
                 2

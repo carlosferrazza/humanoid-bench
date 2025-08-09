@@ -184,8 +184,14 @@ class EGNN(nn.Module):
         self.hidden_nf = hidden_nf
         self.device = device
         self.n_layers = n_layers
-        self.embedding_in = nn.Linear(in_node_nf, self.hidden_nf)
-        self.embedding_out = nn.Linear(self.hidden_nf, out_node_nf)
+        self.embedding_in = nn.Sequential(
+            nn.Linear(in_node_nf, self.hidden_nf, device=device), 
+            act_fn
+        )
+        self.embedding_out = nn.Sequential(
+            nn.Linear(self.hidden_nf, out_node_nf, device=device),
+            nn.Tanh(),
+        )
         self.batch_size = batch_size
         for i in range(0, n_layers):
             self.add_module(
@@ -203,12 +209,7 @@ class EGNN(nn.Module):
                     coords_agg=coords_agg,
                 ),
             )
-        self.to(self.device)
         self.robot = robot
-
-        edge_index, edge_attr, num_nodes, num_edges = build_edge_index_and_attr(
-            self.robot, self.batch_size, self.device
-        )
 
         edge_index, edge_attr, num_nodes, num_edges = build_edge_index_and_attr(
             self.robot, self.batch_size, self.device
@@ -220,16 +221,13 @@ class EGNN(nn.Module):
 
     def forward(self, h, x, edges, edge_attr):
         current_batch_size = int(h.shape[0] / self.num_nodes)
-        current_batch_size = int(h.shape[0] / self.num_nodes)
 
         h = self.embedding_in(h)
-        # apply actfn here?
 
         for i in range(0, self.n_layers):
             h, x, _ = self._modules["gcl_%d" % i](h, edges, x, edge_attr=edge_attr)
 
         h = self.embedding_out(h)
-        h = torch.tanh(h)
 
         h = h.view(current_batch_size, self.num_nodes)
 
@@ -252,7 +250,9 @@ class EGNN(nn.Module):
             ]
             edge_attr = self.edge_attr[: batch_size * self.num_edges].clone()
 
-        x = xpos[:, 1:].reshape(-1, 3)  # (B*N, 3)
+        x = xpos[:, 1:].reshape(-1, 3)
+        x_base = xpos[:, 0].repeat_interleave(self.num_nodes, dim=1).reshape(-1, 3)
+        x = x - x_base
 
         if self.robot == "h1":
             h = torch.stack(

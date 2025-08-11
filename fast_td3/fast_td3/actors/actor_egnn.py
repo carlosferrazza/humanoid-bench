@@ -24,6 +24,7 @@ class ActorEGNN(nn.Module):
         attention: bool = False,
         coords_agg: str = "mean",
         normalize: bool = False,
+        tanh: bool = False,
     ):
         super().__init__()
         self.n_act = n_act
@@ -53,6 +54,7 @@ class ActorEGNN(nn.Module):
             attention=attention,
             coords_agg=coords_agg,
             normalize=normalize,
+            tanh=tanh,
         )
 
         # Initialize noise parameters

@@ -55,6 +55,7 @@ class ActorEGNN(nn.Module):
             coords_agg=coords_agg,
             normalize=normalize,
             tanh=tanh,
+            init_scale=init_scale,
         )
 
         # Initialize noise parameters

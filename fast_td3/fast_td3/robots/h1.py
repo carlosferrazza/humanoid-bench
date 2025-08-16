@@ -3,8 +3,10 @@ import torch
 from torch_geometric.data import HeteroData
 from collections import defaultdict
 
+
 class NodeType(str, enum.Enum):
     JOINT = "joint"
+
 
 class H1:
     joint_dict = {
@@ -35,58 +37,47 @@ class H1:
         (joint_dict["left_hip_yaw"], joint_dict["left_hip_pitch"]),
         (joint_dict["left_hip_yaw"], joint_dict["left_knee"]),
         (joint_dict["left_hip_yaw"], joint_dict["torso"]),
-
-        # left hip pitch
-        (joint_dict["left_hip_pitch"], joint_dict["left_hip_yaw"]),
-        (joint_dict["left_hip_pitch"], joint_dict["left_hip_roll"]),
-        (joint_dict["left_hip_pitch"], joint_dict["left_knee"]),
-        (joint_dict["left_hip_pitch"], joint_dict["torso"]),
-
         # left hip roll
         (joint_dict["left_hip_roll"], joint_dict["left_hip_yaw"]),
         (joint_dict["left_hip_roll"], joint_dict["left_hip_pitch"]),
         (joint_dict["left_hip_roll"], joint_dict["left_knee"]),
         (joint_dict["left_hip_roll"], joint_dict["torso"]),
-
+        # left hip pitch
+        (joint_dict["left_hip_pitch"], joint_dict["left_hip_yaw"]),
+        (joint_dict["left_hip_pitch"], joint_dict["left_hip_roll"]),
+        (joint_dict["left_hip_pitch"], joint_dict["left_knee"]),
+        (joint_dict["left_hip_pitch"], joint_dict["torso"]),
         # left knee
         (joint_dict["left_knee"], joint_dict["left_ankle"]),
         (joint_dict["left_knee"], joint_dict["torso"]),
         (joint_dict["left_knee"], joint_dict["left_hip_yaw"]),
         (joint_dict["left_knee"], joint_dict["left_hip_roll"]),
         (joint_dict["left_knee"], joint_dict["left_hip_pitch"]),
-
         # left ankle
         (joint_dict["left_ankle"], joint_dict["left_knee"]),
-
-
         # right hip yaw
         (joint_dict["right_hip_yaw"], joint_dict["right_hip_roll"]),
         (joint_dict["right_hip_yaw"], joint_dict["right_hip_pitch"]),
         (joint_dict["right_hip_yaw"], joint_dict["right_knee"]),
         (joint_dict["right_hip_yaw"], joint_dict["torso"]),
-
-        # right hip pitch
-        (joint_dict["right_hip_pitch"], joint_dict["right_hip_yaw"]),
-        (joint_dict["right_hip_pitch"], joint_dict["right_hip_roll"]),
-        (joint_dict["right_hip_pitch"], joint_dict["right_knee"]),
-        (joint_dict["right_hip_pitch"], joint_dict["torso"]),
-
         # right hip roll
         (joint_dict["right_hip_roll"], joint_dict["right_hip_yaw"]),
         (joint_dict["right_hip_roll"], joint_dict["right_hip_pitch"]),
         (joint_dict["right_hip_roll"], joint_dict["right_knee"]),
         (joint_dict["right_hip_roll"], joint_dict["torso"]),
-
+        # right hip pitch
+        (joint_dict["right_hip_pitch"], joint_dict["right_hip_yaw"]),
+        (joint_dict["right_hip_pitch"], joint_dict["right_hip_roll"]),
+        (joint_dict["right_hip_pitch"], joint_dict["right_knee"]),
+        (joint_dict["right_hip_pitch"], joint_dict["torso"]),
         # right knee
         (joint_dict["right_knee"], joint_dict["right_ankle"]),
         (joint_dict["right_knee"], joint_dict["torso"]),
         (joint_dict["right_knee"], joint_dict["right_hip_yaw"]),
         (joint_dict["right_knee"], joint_dict["right_hip_roll"]),
         (joint_dict["right_knee"], joint_dict["right_hip_pitch"]),
-
         # right ankle
         (joint_dict["right_ankle"], joint_dict["right_knee"]),
-
         # torso
         (joint_dict["torso"], joint_dict["left_hip_yaw"]),
         (joint_dict["torso"], joint_dict["right_hip_yaw"]),
@@ -100,53 +91,45 @@ class H1:
         (joint_dict["torso"], joint_dict["right_shoulder_roll"]),
         (joint_dict["torso"], joint_dict["left_shoulder_yaw"]),
         (joint_dict["torso"], joint_dict["right_shoulder_yaw"]),
-
         # left shoulder pitch
         (joint_dict["left_shoulder_pitch"], joint_dict["torso"]),
         (joint_dict["left_shoulder_pitch"], joint_dict["left_shoulder_roll"]),
         (joint_dict["left_shoulder_pitch"], joint_dict["left_shoulder_yaw"]),
         (joint_dict["left_shoulder_pitch"], joint_dict["left_elbow"]),
-
-        # left shoulder yaw
-        (joint_dict["left_shoulder_yaw"], joint_dict["torso"]),
-        (joint_dict["left_shoulder_yaw"], joint_dict["left_shoulder_roll"]),
-        (joint_dict["left_shoulder_yaw"], joint_dict["left_shoulder_pitch"]),
-        (joint_dict["left_shoulder_yaw"], joint_dict["left_elbow"]),
-
         # left shoulder roll
         (joint_dict["left_shoulder_roll"], joint_dict["torso"]),
         (joint_dict["left_shoulder_roll"], joint_dict["left_shoulder_pitch"]),
         (joint_dict["left_shoulder_roll"], joint_dict["left_shoulder_yaw"]),
         (joint_dict["left_shoulder_roll"], joint_dict["left_elbow"]),
-
+        # left shoulder yaw
+        (joint_dict["left_shoulder_yaw"], joint_dict["torso"]),
+        (joint_dict["left_shoulder_yaw"], joint_dict["left_shoulder_roll"]),
+        (joint_dict["left_shoulder_yaw"], joint_dict["left_shoulder_pitch"]),
+        (joint_dict["left_shoulder_yaw"], joint_dict["left_elbow"]),
         # left elbow
         (joint_dict["left_elbow"], joint_dict["left_shoulder_roll"]),
         (joint_dict["left_elbow"], joint_dict["left_shoulder_pitch"]),
         (joint_dict["left_elbow"], joint_dict["left_shoulder_yaw"]),
-
         # right shoulder pitch
         (joint_dict["right_shoulder_pitch"], joint_dict["torso"]),
         (joint_dict["right_shoulder_pitch"], joint_dict["right_shoulder_roll"]),
         (joint_dict["right_shoulder_pitch"], joint_dict["right_shoulder_yaw"]),
         (joint_dict["right_shoulder_pitch"], joint_dict["right_elbow"]),
-
-        # right shoulder yaw
-        (joint_dict["right_shoulder_yaw"], joint_dict["torso"]),
-        (joint_dict["right_shoulder_yaw"], joint_dict["right_shoulder_roll"]),
-        (joint_dict["right_shoulder_yaw"], joint_dict["right_shoulder_pitch"]),
-        (joint_dict["right_shoulder_yaw"], joint_dict["right_elbow"]),
-
         # right shoulder roll
         (joint_dict["right_shoulder_roll"], joint_dict["torso"]),
         (joint_dict["right_shoulder_roll"], joint_dict["right_shoulder_pitch"]),
         (joint_dict["right_shoulder_roll"], joint_dict["right_shoulder_yaw"]),
         (joint_dict["right_shoulder_roll"], joint_dict["right_elbow"]),
-
+        # right shoulder yaw
+        (joint_dict["right_shoulder_yaw"], joint_dict["torso"]),
+        (joint_dict["right_shoulder_yaw"], joint_dict["right_shoulder_roll"]),
+        (joint_dict["right_shoulder_yaw"], joint_dict["right_shoulder_pitch"]),
+        (joint_dict["right_shoulder_yaw"], joint_dict["right_elbow"]),
         # right elbow
         (joint_dict["right_elbow"], joint_dict["right_shoulder_roll"]),
         (joint_dict["right_elbow"], joint_dict["right_shoulder_pitch"]),
     ]
-    
+
     edge_type_encoding = [
         0,  # (left_hip_yaw, left_hip_roll)      - left_leg
         1,  # (left_hip_roll, left_hip_pitch)    - left_leg
@@ -217,13 +200,20 @@ class H1:
 
     node_type = NodeType
 
-    def create_joint_graph(self, batch_edge_index, batch_edge_attr,  joint_positions) -> HeteroData:
+    def create_joint_graph(
+        self, batch_edge_index, batch_edge_attr, joint_positions
+    ) -> HeteroData:
         hetero_data = HeteroData()
         hetero_data[self.node_type.JOINT].x = joint_positions
-        hetero_data[self.node_type.JOINT, 'connects', self.node_type.JOINT].edge_index = batch_edge_index
-        hetero_data[self.node_type.JOINT, 'connects', self.node_type.JOINT].edge_attr = batch_edge_attr
-        
+        hetero_data[
+            self.node_type.JOINT, "connects", self.node_type.JOINT
+        ].edge_index = batch_edge_index
+        hetero_data[
+            self.node_type.JOINT, "connects", self.node_type.JOINT
+        ].edge_attr = batch_edge_attr
+
         return hetero_data
+
 
 h1 = H1()
 
@@ -234,9 +224,9 @@ if __name__ == "__main__":
     batch_size = 4
     num_nodes = 19
 
-    x = torch.randn(batch_size*num_nodes, 3)
-    edge_index = torch.rand(batch_size*18, 1) 
-    edge_attr = torch.rand(batch_size*18, 1)   
+    x = torch.randn(batch_size * num_nodes, 3)
+    edge_index = torch.rand(batch_size * 18, 1)
+    edge_attr = torch.rand(batch_size * 18, 1)
 
     graph = h1.create_joint_graph(edge_index, edge_attr, x)
     print(graph)

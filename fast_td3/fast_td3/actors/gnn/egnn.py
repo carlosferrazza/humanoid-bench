@@ -156,11 +156,12 @@ class EGNN(nn.Module):
         act_fn,
         n_layers,
         robot,
+        init_scale,
         residual=True,
         attention=False,
         normalize=False,
         tanh=False,
-        coords_agg="mean"
+        coords_agg="mean",
     ):
         """
         :param in_node_nf: Number of features for 'h' at the input
@@ -273,36 +274,22 @@ class EGNN(nn.Module):
         return h, x, edge_index, edge_attr
 
 
-@torch.jit.script
-def unsorted_segment_sum(data: torch.Tensor, segment_ids: torch.Tensor, num_segments: int) -> torch.Tensor:
-    """
-    JIT-compiled optimized unsorted segment sum using scatter_add.
-    """
-    result = torch.zeros(num_segments, data.size(1), dtype=data.dtype, device=data.device)
-    segment_ids_expanded = segment_ids.unsqueeze(-1).expand(-1, data.size(1))
-    result.scatter_add_(0, segment_ids_expanded, data)
+def unsorted_segment_sum(data, segment_ids, num_segments):
+    result_shape = (num_segments, data.size(1))
+    result = data.new_full(result_shape, 0)  # Init empty result tensor.
+    segment_ids = segment_ids.unsqueeze(-1).expand(-1, data.size(1))
+    result.scatter_add_(0, segment_ids, data)
     return result
 
 
-@torch.jit.script
-def unsorted_segment_mean(data: torch.Tensor, segment_ids: torch.Tensor, num_segments: int) -> torch.Tensor:
-    """
-    JIT-compiled optimized unsorted segment mean with efficient counting.
-    """
-    result = torch.zeros(num_segments, data.size(1), dtype=data.dtype, device=data.device)
-    segment_ids_expanded = segment_ids.unsqueeze(-1).expand(-1, data.size(1))
-    
-    # Sum values
-    result.scatter_add_(0, segment_ids_expanded, data)
-    
-    # Count occurrences
-    count = torch.zeros(num_segments, data.size(1), dtype=data.dtype, device=data.device)
-    ones = torch.ones_like(data)
-    count.scatter_add_(0, segment_ids_expanded, ones)
-    
-    # Use torch.where to handle division by zero
-    return torch.where(count > 0, result / count, result)
-
+def unsorted_segment_mean(data, segment_ids, num_segments):
+    result_shape = (num_segments, data.size(1))
+    segment_ids = segment_ids.unsqueeze(-1).expand(-1, data.size(1))
+    result = data.new_full(result_shape, 0)  # Init empty result tensor.
+    count = data.new_full(result_shape, 0)
+    result.scatter_add_(0, segment_ids, data)
+    count.scatter_add_(0, segment_ids, torch.ones_like(data))
+    return result / count.clamp(min=1)
 
 def get_edges(n_nodes):
     rows, cols = [], []

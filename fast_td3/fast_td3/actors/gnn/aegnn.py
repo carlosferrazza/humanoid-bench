@@ -195,7 +195,7 @@ class AngleEGNN(nn.Module):
         normalize=False,
         tanh=False,
         use_pose_embedding=True,
-        pose_dim=1,  
+        pose_dim=1,
     ):
         """
         Args:
@@ -213,17 +213,19 @@ class AngleEGNN(nn.Module):
         self.use_pose_embedding = use_pose_embedding
         self.pose_dim = pose_dim
 
-        self.embedding_in = nn.Linear(in_node_nf, self.hidden_nf)
-        self.embedding_out = nn.Linear(self.hidden_nf, out_node_nf)
+        self.embedding_in = nn.Sequential(nn.Linear(in_node_nf, self.hidden_nf), act_fn)
+        self.embedding_out = nn.Sequential(
+            nn.Linear(self.hidden_nf, out_node_nf),
+            nn.Tanh(),
+        )
 
         if self.use_pose_embedding:
             self.pose_embedding_in = nn.Linear(
                 joint_dim * 2, self.pose_dim
             )  # *2 for cos/sin
 
-        for i in range(0, n_layers):
-            self.add_module(
-                "angle_gcl_%d" % i,
+        self.layers = nn.ModuleList(
+            [
                 Angle_GCL(
                     self.hidden_nf,
                     self.hidden_nf,
@@ -235,8 +237,10 @@ class AngleEGNN(nn.Module):
                     normalize=normalize,
                     tanh=tanh,
                     use_pose_embedding=use_pose_embedding,
-                ),
-            )
+                )
+                for _ in range(n_layers)
+            ]
+        )
         self.to(self.device)
         self.robot = robot
 
@@ -270,13 +274,10 @@ class AngleEGNN(nn.Module):
             trig_repr = torch.cat([cos_angles, sin_angles], dim=-1)
             pose = self.pose_embedding_in(trig_repr)
 
-        for i in range(0, self.n_layers):
-            h, pose, _ = self._modules["angle_gcl_%d" % i](
-                h, edges, angles, pose=pose, edge_attr=edge_attr
-            )
+        for layer in self.layers:
+            h, pose, _ = layer(h, edges, angles, pose=pose, edge_attr=edge_attr)
 
         h = self.embedding_out(h)
-        h = torch.tanh(h)
 
         h = h.view(current_batch_size, self.num_nodes)
 

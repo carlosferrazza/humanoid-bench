@@ -1,0 +1,15 @@
+repos:
+  - repo: local
+    hooks:
+      - id: run-tests
+        name: Run tests
+        entry: python -m pytest tests/ -v
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: clear-notebook-outputs
+        name: Clear notebook outputs
+        entry: jupyter nbconvert --clear-output --inplace
+        language: system
+        files: \.ipynb$
+        types: [jupyter]

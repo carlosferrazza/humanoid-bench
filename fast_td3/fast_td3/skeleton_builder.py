@@ -23,15 +23,15 @@ def build_edge_index_and_attr(robot_name, batch_size, device):
     edge_index = torch.stack([src_batch, dst_batch])
 
     # Normalize edge types as a tensor
-    edge_types = torch.tensor(robot.edge_type_encoding, dtype=torch.float32, device=device)
-    normalized_edge_type_encoding = edge_types / edge_types.max()
-    edge_attr = (
-        normalized_edge_type_encoding
-        .repeat(batch_size)
-        .unsqueeze(-1)
-    )
+    # edge_types = torch.tensor(robot.edge_type_encoding, dtype=torch.float32, device=device)
+    # normalized_edge_type_encoding = edge_types / edge_types.max()
+    # edge_attr = (
+    #     normalized_edge_type_encoding
+    #     .repeat(batch_size)
+    #     .unsqueeze(-1)
+    # )
 
-    return edge_index, edge_attr, robot.num_nodes, robot.num_edges
+    return edge_index, robot.num_nodes, robot.num_edges
 
 
 def build_edge_index_and_node_attr(robot_name, batch_size, device):

@@ -2,7 +2,8 @@ from torch import nn
 import torch
 
 from fast_td3.skeleton_builder import build_edge_index_and_attr
-
+from fast_td3.robots.h1 import h1_fk
+from fast_td3.robots.h1_jax import h1_jax_fk
 
 class E_GCL(nn.Module):
     """
@@ -216,23 +217,24 @@ class EGNN(nn.Module):
         # Ensure all parameters and submodules are on the requested device
         self.to(self.device)
 
-        edge_index, edge_attr, num_nodes, num_edges = build_edge_index_and_attr(
+        edge_index, num_nodes, num_edges = build_edge_index_and_attr(
             self.robot, self.batch_size, self.device
         )
         self.edge_index = edge_index
-        self.edge_attr = edge_attr
         self.num_nodes = num_nodes
         self.num_edges = num_edges
         # Cache for smaller batch sizes to avoid repeated slicing
         self._edge_cache = {}
 
-    def forward(self, h, x, edges, edge_attr):
+    def forward(self, obs: torch.tensor):
+        h, x, edges = self.build_batched_egnn_input(obs)
+
         current_batch_size = int(h.shape[0] / self.num_nodes)
 
         h = self.embedding_in(h)
 
         for layer in self.layers:
-            h, x, _ = layer(h, edges, x, edge_attr=edge_attr)
+            h, x, _ = layer(h, edges, x)
 
         h = self.embedding_out(h)
 
@@ -240,38 +242,33 @@ class EGNN(nn.Module):
 
         return h
 
-    def build_batched_egnn_input(self, obs: torch.tensor, xpos: torch.tensor):
+    def build_batched_egnn_input(self, obs: torch.tensor):
         batch_size = obs.shape[0]
         if batch_size == self.batch_size:
             edge_index = self.edge_index
-            edge_attr = self.edge_attr
         else:
             assert (
                 batch_size <= self.batch_size
             ), "Batch size exceeds the maximum batch size."
             if batch_size in self._edge_cache:
-                edge_index, edge_attr = self._edge_cache[batch_size]
+                edge_index = self._edge_cache[batch_size]
             else:
                 edge_index = [
                     self.edge_index[0][: batch_size * self.num_edges],
                     self.edge_index[1][: batch_size * self.num_edges],
                 ]
-                edge_attr = self.edge_attr[: batch_size * self.num_edges]
-                self._edge_cache[batch_size] = (edge_index, edge_attr)
+                self._edge_cache[batch_size] = edge_index
 
-        # Broadcast subtract base position, then reshape
-        x = (xpos[:, 1:] - xpos[:, [0]]).reshape(-1, 3)
+        x = h1_jax_fk.fk_joint_positions(obs[:, :26]).reshape(-1, 3)
+        x = x[:, 1:]
+        x = x - x[:, 0:1]
 
         if self.robot == "h1":
-            # Concatenate features directly to avoid extra stack/squeeze
             h = torch.cat([obs[:, 32:].reshape(-1, 1), obs[:, 7:26].reshape(-1, 1)], dim=1)  # (B*N, 2)
         elif self.robot == "g1":
-            h = torch.cat([obs[:, 50:].reshape(-1, 1), obs[:, 7:44].reshape(-1, 1)], dim=1)  # (B*N, 2)
+            h = torch.cat([obs[:, 59:].reshape(-1, 1), obs[:, 7:44].reshape(-1, 1)], dim=1)  # (B*N, 2)
 
-        if self.in_edge_nf == 0:
-            edge_attr = None
-
-        return h, x, edge_index, edge_attr
+        return h, x, edge_index
 
 
 def unsorted_segment_sum(data, segment_ids, num_segments):

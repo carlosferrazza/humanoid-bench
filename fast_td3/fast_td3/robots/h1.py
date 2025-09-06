@@ -2,145 +2,186 @@ import torch
 from torch_geometric.data import HeteroData
 from collections import defaultdict
 import numpy as np
-from scipy.spatial.transform import Rotation as R
+import torch.nn.functional as F
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class H1:
     joint_dict = {
-        "free_base": 0,  # 6-DOF free joint (3 translation + 3 rotation)
-        "left_hip_yaw": 1,
-        "left_hip_roll": 2,
-        "left_hip_pitch": 3,
-        "left_knee": 4,
-        "left_ankle": 5,
-        "right_hip_yaw": 6,
-        "right_hip_roll": 7,
-        "right_hip_pitch": 8,
-        "right_knee": 9,
-        "right_ankle": 10,
-        "torso": 11,
-        "left_shoulder_pitch": 12,
-        "left_shoulder_roll": 13,
-        "left_shoulder_yaw": 14,
-        "left_elbow": 15,
-        "right_shoulder_pitch": 16,
-        "right_shoulder_roll": 17,
-        "right_shoulder_yaw": 18,
-        "right_elbow": 19,
+        "left_hip_yaw": 0,
+        "left_hip_roll": 1,
+        "left_hip_pitch": 2,
+        "left_knee": 3,
+        "left_ankle": 4,
+        "right_hip_yaw": 5,
+        "right_hip_roll": 6,
+        "right_hip_pitch": 7,
+        "right_knee": 8,
+        "right_ankle": 9,
+        "torso": 10,
+        "left_shoulder_pitch": 11,
+        "left_shoulder_roll": 12,
+        "left_shoulder_yaw": 13,
+        "left_elbow": 14,
+        "right_shoulder_pitch": 15,
+        "right_shoulder_roll": 16,
+        "right_shoulder_yaw": 17,
+        "right_elbow": 18,
     }
 
-    edge_list = [
-        # free_base (pelvis) connections - connects to all immediate children
-        (joint_dict["free_base"], joint_dict["left_hip_yaw"]),
-        (joint_dict["free_base"], joint_dict["right_hip_yaw"]),
-        (joint_dict["free_base"], joint_dict["torso"]),
-        
+    # Ordered list of joint names for consistent tensor indexing
+    joint_names_ordered = [
+        "free_base", "left_hip_yaw", "left_hip_roll", "left_hip_pitch", "left_knee", "left_ankle",
+        "right_hip_yaw", "right_hip_roll", "right_hip_pitch", "right_knee", "right_ankle",
+        "torso", "left_shoulder_pitch", "left_shoulder_roll", "left_shoulder_yaw", "left_elbow",
+        "right_shoulder_pitch", "right_shoulder_roll", "right_shoulder_yaw", "right_elbow"
+    ]
+
+    edge_list = [ 
         # left leg chain
-        (joint_dict["left_hip_yaw"], joint_dict["free_base"]),
+        (joint_dict["left_hip_yaw"], joint_dict["torso"]),
         (joint_dict["left_hip_yaw"], joint_dict["left_hip_roll"]),
+        (joint_dict["left_hip_yaw"], joint_dict["left_hip_pitch"]),
+        (joint_dict["left_hip_yaw"], joint_dict["left_knee"]),
+
+
+        (joint_dict["left_hip_roll"], joint_dict["torso"]),
         (joint_dict["left_hip_roll"], joint_dict["left_hip_yaw"]),
         (joint_dict["left_hip_roll"], joint_dict["left_hip_pitch"]),
+        (joint_dict["left_hip_roll"], joint_dict["left_knee"]),
+
+        (joint_dict["left_hip_pitch"], joint_dict["torso"]),
+        (joint_dict["left_hip_pitch"], joint_dict["left_hip_yaw"]),
         (joint_dict["left_hip_pitch"], joint_dict["left_hip_roll"]),
         (joint_dict["left_hip_pitch"], joint_dict["left_knee"]),
+
         (joint_dict["left_knee"], joint_dict["left_hip_pitch"]),
+        (joint_dict["left_knee"], joint_dict["left_hip_roll"]),
+        (joint_dict["left_knee"], joint_dict["left_hip_yaw"]),
         (joint_dict["left_knee"], joint_dict["left_ankle"]),
         (joint_dict["left_ankle"], joint_dict["left_knee"]),
         
         # right leg chain
-        (joint_dict["right_hip_yaw"], joint_dict["free_base"]),
+        (joint_dict["right_hip_yaw"], joint_dict["torso"]),
         (joint_dict["right_hip_yaw"], joint_dict["right_hip_roll"]),
+        (joint_dict["right_hip_yaw"], joint_dict["right_hip_pitch"]),
+        (joint_dict["right_hip_yaw"], joint_dict["right_knee"]),
+
+
+        (joint_dict["right_hip_roll"], joint_dict["torso"]),
         (joint_dict["right_hip_roll"], joint_dict["right_hip_yaw"]),
         (joint_dict["right_hip_roll"], joint_dict["right_hip_pitch"]),
+        (joint_dict["right_hip_roll"], joint_dict["right_knee"]),
+
+        (joint_dict["right_hip_pitch"], joint_dict["torso"]),
+        (joint_dict["right_hip_pitch"], joint_dict["right_hip_yaw"]),
         (joint_dict["right_hip_pitch"], joint_dict["right_hip_roll"]),
         (joint_dict["right_hip_pitch"], joint_dict["right_knee"]),
+
         (joint_dict["right_knee"], joint_dict["right_hip_pitch"]),
+        (joint_dict["right_knee"], joint_dict["right_hip_roll"]),
+        (joint_dict["right_knee"], joint_dict["right_hip_yaw"]),
         (joint_dict["right_knee"], joint_dict["right_ankle"]),
         (joint_dict["right_ankle"], joint_dict["right_knee"]),
         
         # torso connections
-        (joint_dict["torso"], joint_dict["free_base"]),
+        (joint_dict["torso"], joint_dict["left_hip_yaw"]),
+        (joint_dict["torso"], joint_dict["right_hip_yaw"]),
+        (joint_dict["torso"], joint_dict["left_hip_yaw"]),
+        (joint_dict["torso"], joint_dict["left_hip_roll"]),
+        (joint_dict["torso"], joint_dict["left_hip_pitch"]),
+        (joint_dict["torso"], joint_dict["right_hip_yaw"]),
+        (joint_dict["torso"], joint_dict["right_hip_roll"]),
+        (joint_dict["torso"], joint_dict["right_hip_pitch"]),
+
         (joint_dict["torso"], joint_dict["left_shoulder_pitch"]),
+        (joint_dict["torso"], joint_dict["left_shoulder_roll"]),
+        (joint_dict["torso"], joint_dict["left_shoulder_yaw"]),
         (joint_dict["torso"], joint_dict["right_shoulder_pitch"]),
+        (joint_dict["torso"], joint_dict["right_shoulder_roll"]),
+        (joint_dict["torso"], joint_dict["right_shoulder_yaw"]),
         
         # left arm chain
         (joint_dict["left_shoulder_pitch"], joint_dict["torso"]),
         (joint_dict["left_shoulder_pitch"], joint_dict["left_shoulder_roll"]),
+        (joint_dict["left_shoulder_pitch"], joint_dict["left_shoulder_yaw"]),
+        (joint_dict["left_shoulder_pitch"], joint_dict["left_elbow"]),
+
+        (joint_dict["left_shoulder_roll"], joint_dict["torso"]),
         (joint_dict["left_shoulder_roll"], joint_dict["left_shoulder_pitch"]),
         (joint_dict["left_shoulder_roll"], joint_dict["left_shoulder_yaw"]),
+        (joint_dict["left_shoulder_roll"], joint_dict["left_elbow"]),
+
+        (joint_dict["left_shoulder_yaw"], joint_dict["torso"]),
+        (joint_dict["left_shoulder_yaw"], joint_dict["left_shoulder_pitch"]),
         (joint_dict["left_shoulder_yaw"], joint_dict["left_shoulder_roll"]),
         (joint_dict["left_shoulder_yaw"], joint_dict["left_elbow"]),
+
+        (joint_dict["left_elbow"], joint_dict["torso"]),
+        (joint_dict["left_elbow"], joint_dict["left_shoulder_pitch"]),
+        (joint_dict["left_elbow"], joint_dict["left_shoulder_roll"]),
         (joint_dict["left_elbow"], joint_dict["left_shoulder_yaw"]),
         
         # right arm chain
         (joint_dict["right_shoulder_pitch"], joint_dict["torso"]),
         (joint_dict["right_shoulder_pitch"], joint_dict["right_shoulder_roll"]),
+        (joint_dict["right_shoulder_pitch"], joint_dict["right_shoulder_yaw"]),
+        (joint_dict["right_shoulder_pitch"], joint_dict["right_elbow"]),
+
+        (joint_dict["right_shoulder_roll"], joint_dict["torso"]),
         (joint_dict["right_shoulder_roll"], joint_dict["right_shoulder_pitch"]),
         (joint_dict["right_shoulder_roll"], joint_dict["right_shoulder_yaw"]),
+        (joint_dict["right_shoulder_roll"], joint_dict["right_elbow"]),
+
+        (joint_dict["right_shoulder_yaw"], joint_dict["torso"]),
+        (joint_dict["right_shoulder_yaw"], joint_dict["right_shoulder_pitch"]),
         (joint_dict["right_shoulder_yaw"], joint_dict["right_shoulder_roll"]),
         (joint_dict["right_shoulder_yaw"], joint_dict["right_elbow"]),
-        (joint_dict["right_elbow"], joint_dict["right_shoulder_yaw"]),
-    ]
 
-    node_type_encoding = [
-        10, # free_base (new type for 6-DOF base)
-        0,  # left_hip_yaw
-        1,  # left_hip_roll,
-        2,  # left_hip_pitch
-        3,  # left_knee
-        4,  # left_ankle
-        0,  # right_hip_yaw
-        1,  # right_hip_roll
-        2,  # right_hip_pitch
-        3,  # right_knee
-        4,  # right_ankle
-        5,  # torso
-        6,  # left_shoulder_pitch
-        7,  # left_shoulder_roll
-        8,  # left_shoulder_yaw
-        9,  # left_elbow
-        6,  # right_shoulder_pitch
-        7,  # right_shoulder_roll
-        8,  # right_shoulder_yaw
-        9,  # right_elbow
+        (joint_dict["right_elbow"], joint_dict["torso"]),
+        (joint_dict["right_elbow"], joint_dict["right_shoulder_pitch"]),
+        (joint_dict["right_elbow"], joint_dict["right_shoulder_roll"]),
+        (joint_dict["right_elbow"], joint_dict["right_shoulder_yaw"]),
     ]
 
     num_nodes = len(joint_dict)
     num_edges = len(edge_list)
 
-    # Define body tree structure and joint order
+    # Define body tree structure and joint order - using torch tensors
     # Only include main bodies for simplicity; you can extend to every link
     body_tree = {
         "pelvis": {
-            "pos": np.array([0,0,0]), "quat": None, "joint": "free_base", "children": [
-                {"name": "left_hip_yaw_link", "pos": np.array([0, 0.0875, -0.1742]), "joint": "left_hip_yaw", "children": [
-                    {"name": "left_hip_roll_link", "pos": np.array([0.039468, 0, 0]), "joint": "left_hip_roll", "children": [
-                        {"name": "left_hip_pitch_link", "pos": np.array([0,0.11536,0]), "joint": "left_hip_pitch", "children": [
-                            {"name": "left_knee_link", "pos": np.array([0,0,-0.4]), "joint": "left_knee", "children": [
-                                {"name": "left_ankle_link", "pos": np.array([0,0,-0.4]), "joint": "left_ankle", "children": []}
+            "pos": torch.tensor([0.0, 0.0, 0.0], device=device), "quat": None, "joint": "free_base", "children": [
+                {"name": "left_hip_yaw_link", "pos": torch.tensor([0.0, 0.0875, -0.1742], device=device), "joint": "left_hip_yaw", "children": [
+                    {"name": "left_hip_roll_link", "pos": torch.tensor([0.039468, 0.0, 0.0], device=device), "joint": "left_hip_roll", "children": [
+                        {"name": "left_hip_pitch_link", "pos": torch.tensor([0.0, 0.11536, 0.0], device=device), "joint": "left_hip_pitch", "children": [
+                            {"name": "left_knee_link", "pos": torch.tensor([0.0, 0.0, -0.4], device=device), "joint": "left_knee", "children": [
+                                {"name": "left_ankle_link", "pos": torch.tensor([0.0, 0.0, -0.4], device=device), "joint": "left_ankle", "children": []}
                             ]}
                         ]}
                     ]}
                 ]},
-                {"name": "right_hip_yaw_link", "pos": np.array([0, -0.0875, -0.1742]), "joint": "right_hip_yaw", "children": [
-                    {"name": "right_hip_roll_link", "pos": np.array([0.039468,0,0]), "joint": "right_hip_roll", "children": [
-                        {"name": "right_hip_pitch_link", "pos": np.array([0,-0.11536,0]), "joint": "right_hip_pitch", "children": [
-                            {"name": "right_knee_link", "pos": np.array([0,0,-0.4]), "joint": "right_knee", "children": [
-                                {"name": "right_ankle_link", "pos": np.array([0,0,-0.4]), "joint": "right_ankle", "children": []}
+                {"name": "right_hip_yaw_link", "pos": torch.tensor([0.0, -0.0875, -0.1742], device=device), "joint": "right_hip_yaw", "children": [
+                    {"name": "right_hip_roll_link", "pos": torch.tensor([0.039468, 0.0, 0.0], device=device), "joint": "right_hip_roll", "children": [
+                        {"name": "right_hip_pitch_link", "pos": torch.tensor([0.0, -0.11536, 0.0], device=device), "joint": "right_hip_pitch", "children": [
+                            {"name": "right_knee_link", "pos": torch.tensor([0.0, 0.0, -0.4], device=device), "joint": "right_knee", "children": [
+                                {"name": "right_ankle_link", "pos": torch.tensor([0.0, 0.0, -0.4], device=device), "joint": "right_ankle", "children": []}
                             ]}
                         ]}
                     ]}
                 ]},
-                {"name": "torso_link", "pos": np.array([0,0,0]), "joint": "torso", "children": [
-                    {"name": "left_shoulder_pitch_link", "pos": np.array([0.0055,0.15535,0.42999]), "joint": "left_shoulder_pitch", "children": [
-                        {"name": "left_shoulder_roll_link", "pos": np.array([-0.0055,0.0565,-0.0165]), "joint": "left_shoulder_roll", "children": [
-                            {"name": "left_shoulder_yaw_link", "pos": np.array([0,0,-0.1343]), "joint": "left_shoulder_yaw", "children": [
-                                {"name": "left_elbow_link", "pos": np.array([0.0185,0,-0.198]), "joint": "left_elbow", "children": []}
+                {"name": "torso_link", "pos": torch.tensor([0.0, 0.0, 0.0], device=device), "joint": "torso", "children": [
+                    {"name": "left_shoulder_pitch_link", "pos": torch.tensor([0.0055, 0.15535, 0.42999], device=device), "joint": "left_shoulder_pitch", "children": [
+                        {"name": "left_shoulder_roll_link", "pos": torch.tensor([-0.0055, 0.0565, -0.0165], device=device), "joint": "left_shoulder_roll", "children": [
+                            {"name": "left_shoulder_yaw_link", "pos": torch.tensor([0.0, 0.0, -0.1343], device=device), "joint": "left_shoulder_yaw", "children": [
+                                {"name": "left_elbow_link", "pos": torch.tensor([0.0185, 0.0, -0.198], device=device), "joint": "left_elbow", "children": []}
                             ]}
                         ]}
                     ]},
-                    {"name": "right_shoulder_pitch_link", "pos": np.array([0.0055,-0.15535,0.42999]), "joint": "right_shoulder_pitch", "children": [
-                        {"name": "right_shoulder_roll_link", "pos": np.array([-0.0055,-0.0565,-0.0165]), "joint": "right_shoulder_roll", "children": [
-                            {"name": "right_shoulder_yaw_link", "pos": np.array([0,0,-0.1343]), "joint": "right_shoulder_yaw", "children": [
-                                {"name": "right_elbow_link", "pos": np.array([0.0185,0,-0.198]), "joint": "right_elbow", "children": []}
+                    {"name": "right_shoulder_pitch_link", "pos": torch.tensor([0.0055, -0.15535, 0.42999], device=device), "joint": "right_shoulder_pitch", "children": [
+                        {"name": "right_shoulder_roll_link", "pos": torch.tensor([-0.0055, -0.0565, -0.0165], device=device), "joint": "right_shoulder_roll", "children": [
+                            {"name": "right_shoulder_yaw_link", "pos": torch.tensor([0.0, 0.0, -0.1343], device=device), "joint": "right_shoulder_yaw", "children": [
+                                {"name": "right_elbow_link", "pos": torch.tensor([0.0185, 0.0, -0.198], device=device), "joint": "right_elbow", "children": []}
                             ]}
                         ]}
                     ]}
@@ -173,89 +214,220 @@ class H1:
         "right_elbow": 25
     }
 
-    # Joint axes (from XML)
+    # Joint axes (from XML) - using torch tensors
     joint_axes = {
-        "left_hip_yaw": np.array([0,0,1]),
-        "left_hip_roll": np.array([1,0,0]),
-        "left_hip_pitch": np.array([0,1,0]),
-        "left_knee": np.array([0,1,0]),
-        "left_ankle": np.array([0,1,0]),
-        "right_hip_yaw": np.array([0,0,1]),
-        "right_hip_roll": np.array([1,0,0]),
-        "right_hip_pitch": np.array([0,1,0]),
-        "right_knee": np.array([0,1,0]),
-        "right_ankle": np.array([0,1,0]),
-        "torso": np.array([0,0,1]),
-        "left_shoulder_pitch": np.array([0,1,0]),
-        "left_shoulder_roll": np.array([1,0,0]),
-        "left_shoulder_yaw": np.array([0,0,1]),
-        "left_elbow": np.array([0,1,0]),
-        "right_shoulder_pitch": np.array([0,1,0]),
-        "right_shoulder_roll": np.array([1,0,0]),
-        "right_shoulder_yaw": np.array([0,0,1]),
-        "right_elbow": np.array([0,1,0])
+            "left_hip_yaw": torch.tensor([0.0, 0.0, 1.0], device=device),
+            "left_hip_roll": torch.tensor([1.0, 0.0, 0.0], device=device),
+            "left_hip_pitch": torch.tensor([0.0, 1.0, 0.0], device=device),
+            "left_knee": torch.tensor([0.0, 1.0, 0.0], device=device),
+            "left_ankle": torch.tensor([0.0, 1.0, 0.0], device=device),
+            "right_hip_yaw": torch.tensor([0.0, 0.0, 1.0], device=device),
+            "right_hip_roll": torch.tensor([1.0, 0.0, 0.0], device=device),
+            "right_hip_pitch": torch.tensor([0.0, 1.0, 0.0], device=device),
+            "right_knee": torch.tensor([0.0, 1.0, 0.0], device=device),
+            "right_ankle": torch.tensor([0.0, 1.0, 0.0], device=device),
+            "torso": torch.tensor([0.0, 0.0, 1.0], device=device),
+            "left_shoulder_pitch": torch.tensor([0.0, 1.0, 0.0], device=device),
+            "left_shoulder_roll": torch.tensor([1.0, 0.0, 0.0], device=device),
+            "left_shoulder_yaw": torch.tensor([0.0, 0.0, 1.0], device=device),
+            "left_elbow": torch.tensor([0.0, 1.0, 0.0], device=device),
+            "right_shoulder_pitch": torch.tensor([0.0, 1.0, 0.0], device=device),
+            "right_shoulder_roll": torch.tensor([1.0, 0.0, 0.0], device=device),
+            "right_shoulder_yaw": torch.tensor([0.0, 0.0, 1.0], device=device),
+            "right_elbow": torch.tensor([0.0, 1.0, 0.0], device=device)
     }
 
-    def fk_joint_positions(self, body, qpos, parent_T=np.eye(4)):
+class FastH1FK:
+    def __init__(self, body_tree, joint_indices, joint_axes, joint_names_ordered):
         """
-        Compute world-space joint anchor positions for the simplified tree.
-        - Applies free base pose first.
-        - Computes anchor = parent_T @ pos_offset (rotated) and records it.
-        - Applies joint rotation about the anchor (no translation).
-        - Recurse to children using the updated transform (origin moved to anchor).
+        Pre-flatten body_tree into arrays for fast iterative FK.
         """
-        # Start from parent transform
-        T = parent_T.copy()
+        self.body_tree = body_tree
+        self.joint_indices = joint_indices
+        self.joint_axes = joint_axes
+        self.joint_names_ordered = joint_names_ordered
 
-        # Identify this joint
-        joint_name = body.get("joint", body.get("name", f"unnamed_{id(body)}"))
-        pos_offset = body.get("pos", np.zeros(3))
+        (
+            self.joint_names,
+            self.parent,
+            self.pos_offset,
+            self.axis,
+            self.joint_type,
+        ) = self._flatten_tree(body_tree)
 
-        # If free base, set base pose first (pos + orientation)
-        if joint_name == "free_base":
-            base = qpos[self.joint_indices[joint_name]]
-            base_pos = base[:3]
-            base_quat_wxyz = base[3:7]  # [w,x,y,z]
-            # scipy expects [x,y,z,w]
-            base_quat_xyzw = [base_quat_wxyz[1], base_quat_wxyz[2], base_quat_wxyz[3], base_quat_wxyz[0]]
-            T[:3, :3] = R.from_quat(base_quat_xyzw).as_matrix()
-            T[:3, 3] = base_pos
+        self.name_to_index = {n: i for i, n in enumerate(self.joint_names)}
+        self.output_index = {n: i for i, n in enumerate(joint_names_ordered)}
 
-        # Anchor world position: translate by offset expressed in parent's rotated frame
-        anchor_world = T[:3, 3] + T[:3, :3] @ pos_offset
+    def _flatten_tree(self, body_tree):
+        joint_names = []
+        parent = []
+        pos_offset = []
+        axis = []
+        joint_type = []
 
-        # Record anchor position for this joint (strip optional _link suffix)
-        joint_key = joint_name.replace("_link", "")
-        joint_pos = {joint_key: anchor_world}
+        def recurse(node, parent_idx):
+            jname = node.get("joint", node.get("name"))
+            idx = len(joint_names)
 
-        # Rotate about anchor if revolute joint
-        if joint_name in self.joint_axes:
-            axis_local = self.joint_axes[joint_name]
-            angle = qpos[self.joint_indices[joint_name]]
-            R_joint = R.from_rotvec(axis_local * angle).as_matrix()
-            T[:3, :3] = T[:3, :3] @ R_joint
+            joint_names.append(jname)
+            parent.append(parent_idx)
+            pos_offset.append(node.get("pos", torch.zeros(3, device=device)))
+            if jname == "free_base":
+                joint_type.append("free")
+                axis.append(torch.zeros(3, device=device))
+            elif jname in self.joint_axes:
+                joint_type.append("revolute")
+                axis.append(self.joint_axes[jname])
+            else:
+                joint_type.append("fixed")
+                axis.append(torch.zeros(3, device=device))
 
-        # Move origin to the anchor for children
-        T[:3, 3] = anchor_world
+            for child in node.get("children", []):
+                recurse(child, idx)
 
-        # Recurse
-        for child in body.get("children", []):
-            joint_pos.update(self.fk_joint_positions(child, qpos, T))
+        root = list(body_tree.values())[0]
+        recurse(root, -1)
 
-        return joint_pos
+        parent = torch.tensor(parent, dtype=torch.long)
+        pos_offset = torch.stack([
+            t if isinstance(t, torch.Tensor) else torch.tensor(t, dtype=torch.float)
+            for t in pos_offset
+        ])
+        axis = torch.stack(axis)
 
+        return joint_names, parent, pos_offset, axis, joint_type
+
+    def _quat_to_matrix(self, quat, device):
+        """
+        quat: [B,4] [w,x,y,z]
+        return: [B,3,3]
+        """
+        quat = F.normalize(quat, dim=1)
+        w, x, y, z = quat[:, 0], quat[:, 1], quat[:, 2], quat[:, 3]
+        B = quat.shape[0]
+
+        R = torch.zeros(B, 3, 3, device=device, dtype=quat.dtype)
+        R[:, 0, 0] = 1 - 2 * (y*y + z*z)
+        R[:, 0, 1] = 2 * (x*y - z*w)
+        R[:, 0, 2] = 2 * (x*z + y*w)
+        R[:, 1, 0] = 2 * (x*y + z*w)
+        R[:, 1, 1] = 1 - 2 * (x*x + z*z)
+        R[:, 1, 2] = 2 * (y*z - x*w)
+        R[:, 2, 0] = 2 * (x*z - y*w)
+        R[:, 2, 1] = 2 * (y*z + x*w)
+        R[:, 2, 2] = 1 - 2 * (x*x + y*y)
+        return R
+
+    def _axis_angle_to_matrix(self, axis, angle, device):
+        """
+        axis: [3], angle: [B]
+        return: [B,3,3]
+        """
+        # Ensure axis lives on the same device/dtype as angle to avoid CPU/CUDA mismatch
+        if isinstance(axis, torch.Tensor):
+            axis = axis.to(device=device, dtype=angle.dtype)
+        else:
+            axis = torch.as_tensor(axis, device=device, dtype=angle.dtype)
+        axis = axis / (axis.norm() + 1e-9)
+        x, y, z = axis
+        cos, sin = torch.cos(angle), torch.sin(angle)
+        B = angle.shape[0]
+        R = torch.zeros(B, 3, 3, device=device, dtype=angle.dtype)
+
+        R[:, 0, 0] = cos + x*x*(1-cos)
+        R[:, 0, 1] = x*y*(1-cos) - z*sin
+        R[:, 0, 2] = x*z*(1-cos) + y*sin
+        R[:, 1, 0] = y*x*(1-cos) + z*sin
+        R[:, 1, 1] = cos + y*y*(1-cos)
+        R[:, 1, 2] = y*z*(1-cos) - x*sin
+        R[:, 2, 0] = z*x*(1-cos) - y*sin
+        R[:, 2, 1] = z*y*(1-cos) + x*sin
+        R[:, 2, 2] = cos + z*z*(1-cos)
+        return R
+
+    def fk_joint_positions(self, qpos: torch.tensor):
+        """
+        Compute batched FK joint positions (ordered).
+        qpos: [B, qpos_dim]
+        return: [B, num_joints, 3] (aligned with joint_names_ordered)
+        """
+        B = qpos.shape[0]
+        J = len(self.joint_names)
+        device, dtype = qpos.device, qpos.dtype
+
+        joint_pos = torch.zeros(B, J, 3, device=device, dtype=dtype)
+        joint_rot = torch.eye(3, device=device, dtype=dtype).expand(B, 3, 3).unsqueeze(1).repeat(1, J, 1, 1).clone()
+
+        for j, jname in enumerate(self.joint_names):
+            pj = self.parent[j]
+
+            if self.joint_type[j] == "free":
+                base = qpos[:, self.joint_indices[jname]]  # [B,7]
+                pos, quat = base[:, :3], base[:, 3:7]
+                R = self._quat_to_matrix(quat, device)
+                joint_pos[:, j] = pos
+                joint_rot[:, j] = R
+
+            else:
+                R_parent = joint_rot[:, pj]
+                p_parent = joint_pos[:, pj]
+                offset = self.pos_offset[j].to(device, dtype)
+                p_local = (R_parent @ offset) + p_parent
+                joint_pos[:, j] = p_local
+                R_joint = R_parent
+                if self.joint_type[j] == "revolute":
+                    angle = qpos[:, self.joint_indices[jname]]
+                    R_rel = self._axis_angle_to_matrix(self.axis[j], angle, device)
+                    R_joint = R_parent @ R_rel
+                joint_rot[:, j] = R_joint
+
+        # Reorder into [B, ordered_J, 3]
+        num_out = len(self.joint_names_ordered)
+        out = torch.zeros(B, num_out, 3, device=device, dtype=dtype)
+        for jname, j_out in self.output_index.items():
+            if jname in self.name_to_index:
+                out[:, j_out] = joint_pos[:, self.name_to_index[jname]]
+
+        return out
+
+    def get_joint_index_mapping(self):
+        return self.output_index
 
 h1 = H1()
 
+h1_fk = FastH1FK(
+    H1.body_tree,
+    H1.joint_indices,
+    H1.joint_axes,
+    H1.joint_names_ordered,
+)
+
 if __name__ == "__main__":
-    h1 = H1()
+    import matplotlib.pyplot as plt
+    import networkx as nx
 
-    batch_size = 4
-    num_nodes = 20  # Updated to include free_base
+    # Create reverse mapping from joint numbers to names
+    number_to_name = {v: k for k, v in h1.joint_dict.items()}
+    
+    # assume edge_list is already built
+    G = nx.DiGraph()  # directed graph (you can use nx.Graph() if you want undirected)
 
-    x = torch.randn(batch_size * num_nodes, 3)
-    edge_index = torch.rand(batch_size * len(h1.edge_list), 1)
-    edge_attr = torch.rand(batch_size * len(h1.edge_list), 1)
+    G.add_edges_from(h1.edge_list)
 
-    graph = h1.create_joint_graph(edge_index, edge_attr, x)
-    print(graph)
+    plt.figure(figsize=(12, 12))
+    pos = nx.spring_layout(G, seed=42)  # or nx.kamada_kawai_layout(G) for a nicer look
+    
+    # Create labels mapping node numbers to joint names
+    labels = {node: number_to_name.get(node, str(node)) for node in G.nodes()}
+    
+    nx.draw(
+        G, pos,
+        with_labels=True,
+        labels=labels,
+        node_size=1500,
+        node_color="lightblue",
+        font_size=8,
+        font_weight="bold",
+        arrowsize=12
+    )
+    plt.savefig("h1_graph.png")

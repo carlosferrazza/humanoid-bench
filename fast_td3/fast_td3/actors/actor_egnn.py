@@ -67,9 +67,7 @@ class ActorEGNN(nn.Module):
         self.register_buffer("std_max", torch.as_tensor(std_max, device=device))
 
     def forward(self, obs, xpos) -> torch.Tensor:
-        h, x, edges, edge_attr = self.egnn.build_batched_egnn_input(obs, xpos)
-
-        result = self.egnn(h, x, edges, edge_attr)
+        result = self.egnn(obs, xpos)
 
         return result
 

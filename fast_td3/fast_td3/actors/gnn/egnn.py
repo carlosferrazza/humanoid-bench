@@ -226,8 +226,8 @@ class EGNN(nn.Module):
         # Cache for smaller batch sizes to avoid repeated slicing
         self._edge_cache = {}
 
-    def forward(self, obs: torch.tensor):
-        h, x, edges = self.build_batched_egnn_input(obs)
+    def forward(self, obs: torch.tensor, xpos: torch.tensor) -> torch.Tensor:
+        h, x, edges = self.build_batched_egnn_input(obs, xpos)
 
         current_batch_size = int(h.shape[0] / self.num_nodes)
 
@@ -242,7 +242,7 @@ class EGNN(nn.Module):
 
         return h
 
-    def build_batched_egnn_input(self, obs: torch.tensor):
+    def build_batched_egnn_input(self, obs: torch.tensor, xpos: torch.tensor):
         batch_size = obs.shape[0]
         if batch_size == self.batch_size:
             edge_index = self.edge_index
@@ -259,14 +259,12 @@ class EGNN(nn.Module):
                 ]
                 self._edge_cache[batch_size] = edge_index
 
-        x = h1_jax_fk.fk_joint_positions(obs[:, :26]).reshape(-1, 3)
-        x = x[:, 1:]
-        x = x - x[:, 0:1]
+        x = (xpos[:, 1:] - xpos[:, 0:1]).reshape(-1, 3)  # Root-relative positions
 
         if self.robot == "h1":
             h = torch.cat([obs[:, 32:].reshape(-1, 1), obs[:, 7:26].reshape(-1, 1)], dim=1)  # (B*N, 2)
         elif self.robot == "g1":
-            h = torch.cat([obs[:, 59:].reshape(-1, 1), obs[:, 7:44].reshape(-1, 1)], dim=1)  # (B*N, 2)
+            h = torch.cat([obs[:, 50:].reshape(-1, 1), obs[:, 7:44].reshape(-1, 1)], dim=1)  # (B*N, 2)
 
         return h, x, edge_index
 

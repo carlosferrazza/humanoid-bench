@@ -37,111 +37,103 @@ class H1:
         "right_shoulder_pitch", "right_shoulder_roll", "right_shoulder_yaw", "right_elbow"
     ]
 
-    edge_list = [ 
-        # left leg chain
-        (joint_dict["left_hip_yaw"], joint_dict["torso"]),
+    edge_list = [
+        # left hip yaw
         (joint_dict["left_hip_yaw"], joint_dict["left_hip_roll"]),
         (joint_dict["left_hip_yaw"], joint_dict["left_hip_pitch"]),
         (joint_dict["left_hip_yaw"], joint_dict["left_knee"]),
-
-
-        (joint_dict["left_hip_roll"], joint_dict["torso"]),
+        (joint_dict["left_hip_yaw"], joint_dict["torso"]),
+        # left hip roll
         (joint_dict["left_hip_roll"], joint_dict["left_hip_yaw"]),
         (joint_dict["left_hip_roll"], joint_dict["left_hip_pitch"]),
         (joint_dict["left_hip_roll"], joint_dict["left_knee"]),
-
-        (joint_dict["left_hip_pitch"], joint_dict["torso"]),
+        (joint_dict["left_hip_roll"], joint_dict["torso"]),
+        # left hip pitch
         (joint_dict["left_hip_pitch"], joint_dict["left_hip_yaw"]),
         (joint_dict["left_hip_pitch"], joint_dict["left_hip_roll"]),
         (joint_dict["left_hip_pitch"], joint_dict["left_knee"]),
-
-        (joint_dict["left_knee"], joint_dict["left_hip_pitch"]),
-        (joint_dict["left_knee"], joint_dict["left_hip_roll"]),
-        (joint_dict["left_knee"], joint_dict["left_hip_yaw"]),
+        (joint_dict["left_hip_pitch"], joint_dict["torso"]),
+        # left knee
         (joint_dict["left_knee"], joint_dict["left_ankle"]),
+        (joint_dict["left_knee"], joint_dict["torso"]),
+        (joint_dict["left_knee"], joint_dict["left_hip_yaw"]),
+        (joint_dict["left_knee"], joint_dict["left_hip_roll"]),
+        (joint_dict["left_knee"], joint_dict["left_hip_pitch"]),
+        # left ankle
         (joint_dict["left_ankle"], joint_dict["left_knee"]),
-        
-        # right leg chain
-        (joint_dict["right_hip_yaw"], joint_dict["torso"]),
+        # right hip yaw
         (joint_dict["right_hip_yaw"], joint_dict["right_hip_roll"]),
         (joint_dict["right_hip_yaw"], joint_dict["right_hip_pitch"]),
         (joint_dict["right_hip_yaw"], joint_dict["right_knee"]),
-
-
-        (joint_dict["right_hip_roll"], joint_dict["torso"]),
+        (joint_dict["right_hip_yaw"], joint_dict["torso"]),
+        # right hip roll
         (joint_dict["right_hip_roll"], joint_dict["right_hip_yaw"]),
         (joint_dict["right_hip_roll"], joint_dict["right_hip_pitch"]),
         (joint_dict["right_hip_roll"], joint_dict["right_knee"]),
-
-        (joint_dict["right_hip_pitch"], joint_dict["torso"]),
+        (joint_dict["right_hip_roll"], joint_dict["torso"]),
+        # right hip pitch
         (joint_dict["right_hip_pitch"], joint_dict["right_hip_yaw"]),
         (joint_dict["right_hip_pitch"], joint_dict["right_hip_roll"]),
         (joint_dict["right_hip_pitch"], joint_dict["right_knee"]),
-
-        (joint_dict["right_knee"], joint_dict["right_hip_pitch"]),
-        (joint_dict["right_knee"], joint_dict["right_hip_roll"]),
-        (joint_dict["right_knee"], joint_dict["right_hip_yaw"]),
+        (joint_dict["right_hip_pitch"], joint_dict["torso"]),
+        # right knee
         (joint_dict["right_knee"], joint_dict["right_ankle"]),
+        (joint_dict["right_knee"], joint_dict["torso"]),
+        (joint_dict["right_knee"], joint_dict["right_hip_yaw"]),
+        (joint_dict["right_knee"], joint_dict["right_hip_roll"]),
+        (joint_dict["right_knee"], joint_dict["right_hip_pitch"]),
+        # right ankle
         (joint_dict["right_ankle"], joint_dict["right_knee"]),
-        
-        # torso connections
+        # torso
         (joint_dict["torso"], joint_dict["left_hip_yaw"]),
         (joint_dict["torso"], joint_dict["right_hip_yaw"]),
-        (joint_dict["torso"], joint_dict["left_hip_yaw"]),
         (joint_dict["torso"], joint_dict["left_hip_roll"]),
-        (joint_dict["torso"], joint_dict["left_hip_pitch"]),
-        (joint_dict["torso"], joint_dict["right_hip_yaw"]),
         (joint_dict["torso"], joint_dict["right_hip_roll"]),
+        (joint_dict["torso"], joint_dict["left_hip_pitch"]),
         (joint_dict["torso"], joint_dict["right_hip_pitch"]),
-
         (joint_dict["torso"], joint_dict["left_shoulder_pitch"]),
-        (joint_dict["torso"], joint_dict["left_shoulder_roll"]),
-        (joint_dict["torso"], joint_dict["left_shoulder_yaw"]),
         (joint_dict["torso"], joint_dict["right_shoulder_pitch"]),
+        (joint_dict["torso"], joint_dict["left_shoulder_roll"]),
         (joint_dict["torso"], joint_dict["right_shoulder_roll"]),
+        (joint_dict["torso"], joint_dict["left_shoulder_yaw"]),
         (joint_dict["torso"], joint_dict["right_shoulder_yaw"]),
-        
-        # left arm chain
+        # left shoulder pitch
         (joint_dict["left_shoulder_pitch"], joint_dict["torso"]),
         (joint_dict["left_shoulder_pitch"], joint_dict["left_shoulder_roll"]),
         (joint_dict["left_shoulder_pitch"], joint_dict["left_shoulder_yaw"]),
         (joint_dict["left_shoulder_pitch"], joint_dict["left_elbow"]),
-
+        # left shoulder roll
         (joint_dict["left_shoulder_roll"], joint_dict["torso"]),
         (joint_dict["left_shoulder_roll"], joint_dict["left_shoulder_pitch"]),
         (joint_dict["left_shoulder_roll"], joint_dict["left_shoulder_yaw"]),
         (joint_dict["left_shoulder_roll"], joint_dict["left_elbow"]),
-
+        # left shoulder yaw
         (joint_dict["left_shoulder_yaw"], joint_dict["torso"]),
-        (joint_dict["left_shoulder_yaw"], joint_dict["left_shoulder_pitch"]),
         (joint_dict["left_shoulder_yaw"], joint_dict["left_shoulder_roll"]),
+        (joint_dict["left_shoulder_yaw"], joint_dict["left_shoulder_pitch"]),
         (joint_dict["left_shoulder_yaw"], joint_dict["left_elbow"]),
-
-        (joint_dict["left_elbow"], joint_dict["torso"]),
-        (joint_dict["left_elbow"], joint_dict["left_shoulder_pitch"]),
+        # left elbow
         (joint_dict["left_elbow"], joint_dict["left_shoulder_roll"]),
+        (joint_dict["left_elbow"], joint_dict["left_shoulder_pitch"]),
         (joint_dict["left_elbow"], joint_dict["left_shoulder_yaw"]),
-        
-        # right arm chain
+        # right shoulder pitch
         (joint_dict["right_shoulder_pitch"], joint_dict["torso"]),
         (joint_dict["right_shoulder_pitch"], joint_dict["right_shoulder_roll"]),
         (joint_dict["right_shoulder_pitch"], joint_dict["right_shoulder_yaw"]),
         (joint_dict["right_shoulder_pitch"], joint_dict["right_elbow"]),
-
+        # right shoulder roll
         (joint_dict["right_shoulder_roll"], joint_dict["torso"]),
         (joint_dict["right_shoulder_roll"], joint_dict["right_shoulder_pitch"]),
         (joint_dict["right_shoulder_roll"], joint_dict["right_shoulder_yaw"]),
         (joint_dict["right_shoulder_roll"], joint_dict["right_elbow"]),
-
+        # right shoulder yaw
         (joint_dict["right_shoulder_yaw"], joint_dict["torso"]),
-        (joint_dict["right_shoulder_yaw"], joint_dict["right_shoulder_pitch"]),
         (joint_dict["right_shoulder_yaw"], joint_dict["right_shoulder_roll"]),
+        (joint_dict["right_shoulder_yaw"], joint_dict["right_shoulder_pitch"]),
         (joint_dict["right_shoulder_yaw"], joint_dict["right_elbow"]),
-
-        (joint_dict["right_elbow"], joint_dict["torso"]),
-        (joint_dict["right_elbow"], joint_dict["right_shoulder_pitch"]),
+        # right elbow
         (joint_dict["right_elbow"], joint_dict["right_shoulder_roll"]),
-        (joint_dict["right_elbow"], joint_dict["right_shoulder_yaw"]),
+        (joint_dict["right_elbow"], joint_dict["right_shoulder_pitch"]),
     ]
 
     num_nodes = len(joint_dict)

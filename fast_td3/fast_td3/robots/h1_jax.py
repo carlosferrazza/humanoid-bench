@@ -75,56 +75,62 @@ class FastH1FKJAX:
 
     def _quat_to_matrix(self, quat):
         """
+        Memory-optimized quaternion to rotation matrix conversion.
         quat: [B,4] [w,x,y,z]
         return: [B,3,3]
         """
         quat = quat / (jnp.linalg.norm(quat, axis=1, keepdims=True) + 1e-9)
         w, x, y, z = quat[:, 0], quat[:, 1], quat[:, 2], quat[:, 3]
-        B = quat.shape[0]
-
-        R = jnp.zeros((B, 3, 3), dtype=quat.dtype)
-        R = R.at[:, 0, 0].set(1 - 2 * (y*y + z*z))
-        R = R.at[:, 0, 1].set(2 * (x*y - z*w))
-        R = R.at[:, 0, 2].set(2 * (x*z + y*w))
-        R = R.at[:, 1, 0].set(2 * (x*y + z*w))
-        R = R.at[:, 1, 1].set(1 - 2 * (x*x + z*z))
-        R = R.at[:, 1, 2].set(2 * (y*z - x*w))
-        R = R.at[:, 2, 0].set(2 * (x*z - y*w))
-        R = R.at[:, 2, 1].set(2 * (y*z + x*w))
-        R = R.at[:, 2, 2].set(1 - 2 * (x*x + y*y))
+        
+        # Build matrix directly without zero initialization
+        xx, yy, zz = x*x, y*y, z*z
+        xy, xz, yz = x*y, x*z, y*z
+        wx, wy, wz = w*x, w*y, w*z
+        
+        # Stack directly instead of zero-then-set pattern
+        R = jnp.stack([
+            jnp.stack([1 - 2*(yy + zz), 2*(xy - wz), 2*(xz + wy)], axis=1),
+            jnp.stack([2*(xy + wz), 1 - 2*(xx + zz), 2*(yz - wx)], axis=1),
+            jnp.stack([2*(xz - wy), 2*(yz + wx), 1 - 2*(xx + yy)], axis=1)
+        ], axis=1)
+        
         return R
 
     def _axis_angle_to_matrix(self, axis, angle):
         """
+        Memory-optimized axis-angle to rotation matrix conversion.
         axis: [3], angle: [B]
         return: [B,3,3]
         """
         axis = axis / (jnp.linalg.norm(axis) + 1e-9)
         x, y, z = axis
         cos, sin = jnp.cos(angle), jnp.sin(angle)
-        B = angle.shape[0]
-        R = jnp.zeros((B, 3, 3), dtype=angle.dtype)
-
-        R = R.at[:, 0, 0].set(cos + x*x*(1-cos))
-        R = R.at[:, 0, 1].set(x*y*(1-cos) - z*sin)
-        R = R.at[:, 0, 2].set(x*z*(1-cos) + y*sin)
-        R = R.at[:, 1, 0].set(y*x*(1-cos) + z*sin)
-        R = R.at[:, 1, 1].set(cos + y*y*(1-cos))
-        R = R.at[:, 1, 2].set(y*z*(1-cos) - x*sin)
-        R = R.at[:, 2, 0].set(z*x*(1-cos) - y*sin)
-        R = R.at[:, 2, 1].set(z*y*(1-cos) + x*sin)
-        R = R.at[:, 2, 2].set(cos + z*z*(1-cos))
+        one_minus_cos = 1 - cos
+        
+        # Pre-compute common terms
+        xx, yy, zz = x*x, y*y, z*z
+        xy, xz, yz = x*y, x*z, y*z
+        
+        # Build matrix directly
+        R = jnp.stack([
+            jnp.stack([cos + xx*one_minus_cos, xy*one_minus_cos - z*sin, xz*one_minus_cos + y*sin], axis=1),
+            jnp.stack([xy*one_minus_cos + z*sin, cos + yy*one_minus_cos, yz*one_minus_cos - x*sin], axis=1),
+            jnp.stack([xz*one_minus_cos - y*sin, yz*one_minus_cos + x*sin, cos + zz*one_minus_cos], axis=1)
+        ], axis=1)
+        
         return R
 
     def _fk_joint_positions_jax(self, qpos):
         """
-        JAX implementation of FK joint positions computation.
+        Memory-optimized JAX implementation of FK joint positions computation.
         qpos: [B, qpos_dim]
         return: [B, num_joints, 3] (aligned with joint_names_ordered)
         """
         B = qpos.shape[0]
         J = len(self.joint_names)
+        num_out = len(self.joint_names_ordered)
 
+        # Use arrays instead of dictionaries for JIT compatibility
         joint_pos = jnp.zeros((B, J, 3), dtype=qpos.dtype)
         joint_rot = jnp.tile(jnp.eye(3)[None, None, :, :], (B, J, 1, 1))
 
@@ -139,11 +145,21 @@ class FastH1FKJAX:
                 joint_pos = joint_pos.at[:, j, :].set(pos)
                 joint_rot = joint_rot.at[:, j, :, :].set(R)
             else:
-                R_parent = joint_rot[:, pj]
-                p_parent = joint_pos[:, pj]
+                # Use conditional to handle root case (pj == -1)
+                R_parent = jnp.where(
+                    pj >= 0,
+                    joint_rot[:, pj, :, :],
+                    jnp.tile(jnp.eye(3)[None, :, :], (B, 1, 1))
+                )
+                p_parent = jnp.where(
+                    pj >= 0,
+                    joint_pos[:, pj, :],
+                    jnp.zeros((B, 3))
+                )
                 offset = self.pos_offset[j]
-                p_local = (R_parent @ offset) + p_parent
+                p_local = jnp.einsum('bij,j->bi', R_parent, offset) + p_parent
                 joint_pos = joint_pos.at[:, j, :].set(p_local)
+                
                 R_joint = R_parent
                 if self.joint_type[j] == "revolute":
                     angle = qpos[:, self.joint_indices[jname]]
@@ -153,14 +169,12 @@ class FastH1FKJAX:
             
             return joint_pos, joint_rot
 
-        # Process joints sequentially (JAX doesn't support dynamic loops well)
+        # Process joints sequentially
         for j in range(J):
             joint_pos, joint_rot = process_joint(j, joint_pos, joint_rot)
 
-        # Reorder into [B, ordered_J, 3]
-        num_out = len(self.joint_names_ordered)
+        # Direct reordering without creating intermediate array
         out = jnp.zeros((B, num_out, 3), dtype=qpos.dtype)
-        
         for jname, j_out in self.output_index.items():
             if jname in self.name_to_index:
                 j_in = self.name_to_index[jname]
@@ -171,26 +185,30 @@ class FastH1FKJAX:
     @torch._dynamo.disable
     def fk_joint_positions(self, qpos: torch.Tensor):
         """
-        Compute batched FK joint positions (ordered).
+        Memory-optimized batched FK joint positions computation.
         qpos: [B, qpos_dim] (torch.Tensor)
         return: [B, num_joints, 3] (torch.Tensor) (aligned with joint_names_ordered)
         """
-        # Convert torch tensor to JAX array
-        # Move to CPU first, then convert to numpy, then to JAX
-        qpos_jax = jdlpack.from_dlpack(torch.utils.dlpack.to_dlpack(qpos.contiguous()))
+        isTorchTensor = isinstance(qpos, torch.Tensor)
+        
+        # Optimize tensor conversion path
+        if isTorchTensor:
+            # Use direct dlpack transfer for GPU tensors (avoids CPU roundtrip)
+            qpos_jax = jax.dlpack.from_dlpack(torch.utils.dlpack.to_dlpack(qpos.contiguous()))
+        elif isinstance(qpos, np.ndarray):
+            # For numpy arrays, convert directly to JAX
+            qpos_jax = jnp.array(qpos)
+        else:
+            # For CPU tensors, direct numpy conversion is more efficient
+            qpos_jax = jnp.array(qpos.detach().cpu().numpy())
 
-        # Compute FK with JAX
         result_jax = self._fk_joint_positions_jax(qpos_jax)
         
-        # Convert back to torch tensor
-        result_numpy = np.array(result_jax)
-        result_torch = torch.from_numpy(result_numpy)
-        
-        # Move to the same device as input
-        if isinstance(qpos, torch.Tensor) and qpos.is_cuda:
-            result_torch = result_torch.cuda()
-        
-        return result_torch
+        if isTorchTensor:
+            result_torch = torch.utils.dlpack.from_dlpack(jax.dlpack.to_dlpack(result_jax))
+            return result_torch.to(device=qpos.device, dtype=qpos.dtype)
+        else:
+            return np.array(result_jax)
 
     def get_joint_index_mapping(self):
         return self.output_index

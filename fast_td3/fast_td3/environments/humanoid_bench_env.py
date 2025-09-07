@@ -4,10 +4,11 @@ import gymnasium as gym
 
 import humanoid_bench
 from gymnasium.wrappers import TimeLimit
-from fast_td3.environments.subproc_vec_env import SubprocVecEnv
+from stable_baselines3.common.vec_env import SubprocVecEnv
 import numpy as np
 import torch
 from loguru import logger as log
+from fast_td3.robots.h1_jax import h1_jax_fk
 
 # Disable all logging below CRITICAL level
 log.remove()
@@ -83,11 +84,12 @@ class HumanoidBenchEnv:
 
     def reset(self):
         """Reset the environment."""
-        observations , xpos = self.envs.reset()
+        observations = self.envs.reset()
+        xpos = torch.from_numpy(h1_jax_fk.fk_joint_positions(observations)).to(device=self.sim_device, dtype=torch.float)
         observations = torch.from_numpy(observations).to(
             device=self.sim_device, dtype=torch.float
         )
-        xpos = torch.from_numpy(xpos).to(device=self.sim_device, dtype=torch.float)
+
 
         return observations, xpos
 
@@ -101,7 +103,8 @@ class HumanoidBenchEnv:
         assert isinstance(actions, torch.Tensor)
         actions = actions.cpu().numpy()
 
-        observations, rewards, dones, raw_infos, xpos = self.envs.step(actions)
+        observations, rewards, dones, raw_infos = self.envs.step(actions)
+
 
         # This will be used for getting 'true' next observations
         infos = dict()
@@ -114,10 +117,10 @@ class HumanoidBenchEnv:
                     "terminal_observation"
                 ]
 
+        xpos = torch.from_numpy(h1_jax_fk.fk_joint_positions(observations)).to(device=self.sim_device, dtype=torch.float)
         observations = torch.from_numpy(observations).to(
             device=self.sim_device, dtype=torch.float
         )
-        xpos = torch.from_numpy(xpos).to(device=self.sim_device, dtype=torch.float)
         rewards = torch.from_numpy(rewards).to(
             device=self.sim_device, dtype=torch.float
         )

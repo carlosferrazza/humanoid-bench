@@ -616,7 +616,6 @@ class SimpleReplayBufferGNN(nn.Module):
                 (self.n_env, batch_size),
                 device=self.device,
             )
-            
             obs_indices = indices.unsqueeze(-1).expand(-1, -1, self.n_obs)
             act_indices = indices.unsqueeze(-1).expand(-1, -1, self.n_act)
             observations = torch.gather(self.observations, 1, obs_indices).reshape(
@@ -628,18 +627,9 @@ class SimpleReplayBufferGNN(nn.Module):
             actions = torch.gather(self.actions, 1, act_indices).reshape(
                 self.n_env * batch_size, self.n_act
             )
-            # xposs = torch.gather( 
-            #     self.xposs, 1, obs_indices.unsqueeze(-1).expand(-1, -1, self.n_xpos, 3)
-            # ).reshape(self.n_env * batch_size, self.n_xpos, 3)
-            # next_xposs = torch.gather(
-            #     self.next_xposs, 1, obs_indices.unsqueeze(-1).expand(-1, -1, self.n_xpos, 3)
-            # ).reshape(self.n_env * batch_size, self.n_xpos, 3)
-
             env_ids = torch.arange(self.n_env, device=self.device).unsqueeze(1).expand(-1, batch_size)
             xposs = self.xposs[env_ids, indices].reshape(self.n_env * batch_size, self.n_xpos, 3)
             next_xposs = self.next_xposs[env_ids, indices].reshape(self.n_env * batch_size, self.n_xpos, 3)
-
-            
             rewards = torch.gather(self.rewards, 1, indices).reshape(
                 self.n_env * batch_size
             )

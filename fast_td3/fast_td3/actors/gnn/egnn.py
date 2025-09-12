@@ -1,8 +1,7 @@
 from torch import nn
 import torch
 
-from fast_td3.skeleton_builder import build_edge_index_and_attr
-
+from fast_td3.robots.graph_builder import GraphBuilder
 
 class E_GCL(nn.Module):
     """
@@ -215,11 +214,8 @@ class EGNN(nn.Module):
         # Ensure all parameters and submodules are on the requested device
         self.to(self.device)
 
-        edge_index, edge_attr, num_nodes, num_edges = build_edge_index_and_attr(
-            self.robot, self.batch_size, self.device
-        )
+        edge_index, num_nodes, num_edges = GraphBuilder().generate_edge_index(self.batch_size, self.device)
         self.edge_index = edge_index
-        self.edge_attr = edge_attr
         self.num_nodes = num_nodes
         self.num_edges = num_edges
         # Cache for smaller batch sizes to avoid repeated slicing
@@ -243,20 +239,18 @@ class EGNN(nn.Module):
         batch_size = obs.shape[0]
         if batch_size == self.batch_size:
             edge_index = self.edge_index
-            edge_attr = self.edge_attr
         else:
             assert (
                 batch_size <= self.batch_size
             ), "Batch size exceeds the maximum batch size."
             if batch_size in self._edge_cache:
-                edge_index, edge_attr = self._edge_cache[batch_size]
+                edge_index= self._edge_cache[batch_size]
             else:
                 edge_index = [
                     self.edge_index[0][: batch_size * self.num_edges],
                     self.edge_index[1][: batch_size * self.num_edges],
                 ]
-                edge_attr = self.edge_attr[: batch_size * self.num_edges]
-                self._edge_cache[batch_size] = (edge_index, edge_attr)
+                self._edge_cache[batch_size] = edge_index
 
         # Broadcast subtract base position, then reshape
         x = (xpos[:, 1:] - xpos[:, [0]]).reshape(-1, 3)
@@ -267,10 +261,10 @@ class EGNN(nn.Module):
         elif self.robot == "g1":
             h = torch.cat([obs[:, 50:].reshape(-1, 1), obs[:, 7:44].reshape(-1, 1)], dim=1)  # (B*N, 2)
 
-        if self.in_edge_nf == 0:
-            edge_attr = None
+        # if self.in_edge_nf == 0:
+        #     edge_attr = None
 
-        return h, x, edge_index, edge_attr
+        return h, x, edge_index, None
 
 
 @torch.jit.script
@@ -302,49 +296,3 @@ def unsorted_segment_mean(data: torch.Tensor, segment_ids: torch.Tensor, num_seg
     
     # Use torch.where to handle division by zero
     return torch.where(count > 0, result / count, result)
-
-
-def get_edges(n_nodes):
-    rows, cols = [], []
-    for i in range(n_nodes):
-        for j in range(n_nodes):
-            if i != j:
-                rows.append(i)
-                cols.append(j)
-
-    edges = [rows, cols]
-    return edges
-
-
-def get_edges_batch(n_nodes, batch_size):
-    edges = get_edges(n_nodes)
-    edge_attr = torch.ones(len(edges[0]) * batch_size, 1)
-    edges = [torch.LongTensor(edges[0]), torch.LongTensor(edges[1])]
-    if batch_size == 1:
-        return edges, edge_attr
-    elif batch_size > 1:
-        rows, cols = [], []
-        for i in range(batch_size):
-            rows.append(edges[0] + n_nodes * i)
-            cols.append(edges[1] + n_nodes * i)
-        edges = [torch.cat(rows), torch.cat(cols)]
-    return edges, edge_attr
-
-
-if __name__ == "__main__":
-    # Dummy parameters
-    batch_size = 8
-    n_nodes = 4
-    n_feat = 1
-    x_dim = 3
-
-    # Dummy variables h, x and fully connected edges
-    h = torch.ones(batch_size * n_nodes, n_feat)
-    x = torch.ones(batch_size * n_nodes, x_dim)
-    edges, edge_attr = get_edges_batch(n_nodes, batch_size)
-
-    # Initialize EGNN
-    egnn = EGNN(in_node_nf=n_feat, hidden_nf=32, out_node_nf=1, in_edge_nf=1)
-
-    # Run EGNN
-    h, x = egnn(h, x, edges, edge_attr)

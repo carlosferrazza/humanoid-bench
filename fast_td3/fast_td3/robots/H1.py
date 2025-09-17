@@ -23,70 +23,105 @@ class H1(Robot):
         right_shoulder_roll = 16
         right_shoulder_yaw = 17
         right_elbow = 18
+
     @property
     def joint_connections(self):
         return [
-            # left_hip_yaw ↔ left_hip_roll and torso
-            (self.JOINT.left_hip_yaw, self.JOINT.left_hip_roll),
-            (self.JOINT.left_hip_roll, self.JOINT.left_hip_yaw),
+            # left hip yaw
             (self.JOINT.left_hip_yaw, self.JOINT.torso),
-            (self.JOINT.torso, self.JOINT.left_hip_yaw),
-
-            # left_hip_roll ↔ left_hip_pitch
+            (self.JOINT.left_hip_yaw, self.JOINT.left_hip_roll),
+            (self.JOINT.left_hip_yaw, self.JOINT.left_hip_pitch),
+            (self.JOINT.left_hip_yaw, self.JOINT.left_knee),
+            # left hip roll
+            (self.JOINT.left_hip_roll, self.JOINT.torso),
+            (self.JOINT.left_hip_roll, self.JOINT.left_hip_yaw),
             (self.JOINT.left_hip_roll, self.JOINT.left_hip_pitch),
+            (self.JOINT.left_hip_roll, self.JOINT.left_knee),
+            # left hip pitch
+            (self.JOINT.left_hip_pitch, self.JOINT.torso),
+            (self.JOINT.left_hip_pitch, self.JOINT.left_hip_yaw),
             (self.JOINT.left_hip_pitch, self.JOINT.left_hip_roll),
-
-            # left_hip_pitch ↔ left_knee
             (self.JOINT.left_hip_pitch, self.JOINT.left_knee),
+            # left knee
+            (self.JOINT.left_knee, self.JOINT.left_hip_yaw),
+            (self.JOINT.left_knee, self.JOINT.left_hip_roll),
             (self.JOINT.left_knee, self.JOINT.left_hip_pitch),
-
-            # left_knee ↔ left_ankle
             (self.JOINT.left_knee, self.JOINT.left_ankle),
+            # left ankle
             (self.JOINT.left_ankle, self.JOINT.left_knee),
-
-            # right_hip_yaw ↔ right_hip_roll and torso
-            (self.JOINT.right_hip_yaw, self.JOINT.right_hip_roll),
-            (self.JOINT.right_hip_roll, self.JOINT.right_hip_yaw),
+            # right hip yaw
             (self.JOINT.right_hip_yaw, self.JOINT.torso),
-            (self.JOINT.torso, self.JOINT.right_hip_yaw),
-
-            # right_hip_roll ↔ right_hip_pitch
+            (self.JOINT.right_hip_yaw, self.JOINT.right_hip_roll),
+            (self.JOINT.right_hip_yaw, self.JOINT.right_hip_pitch),
+            (self.JOINT.right_hip_yaw, self.JOINT.right_knee),
+            # right hip roll
+            (self.JOINT.right_hip_roll, self.JOINT.torso),
+            (self.JOINT.right_hip_roll, self.JOINT.right_hip_yaw),
             (self.JOINT.right_hip_roll, self.JOINT.right_hip_pitch),
+            (self.JOINT.right_hip_roll, self.JOINT.right_knee),
+            # right hip pitch
+            (self.JOINT.right_hip_pitch, self.JOINT.torso),
+            (self.JOINT.right_hip_pitch, self.JOINT.right_hip_yaw),
             (self.JOINT.right_hip_pitch, self.JOINT.right_hip_roll),
-
-            # right_hip_pitch ↔ right_knee
             (self.JOINT.right_hip_pitch, self.JOINT.right_knee),
+            # right knee
+            (self.JOINT.right_knee, self.JOINT.right_hip_yaw),
+            (self.JOINT.right_knee, self.JOINT.right_hip_roll),
             (self.JOINT.right_knee, self.JOINT.right_hip_pitch),
-
-            # right_knee ↔ right_ankle
             (self.JOINT.right_knee, self.JOINT.right_ankle),
+            # right ankle
             (self.JOINT.right_ankle, self.JOINT.right_knee),
-
-            # torso ↔ left_shoulder_pitch and right_shoulder_pitch
+            # torso
+            (self.JOINT.torso, self.JOINT.left_hip_yaw),
+            (self.JOINT.torso, self.JOINT.right_hip_yaw),
+            (self.JOINT.torso, self.JOINT.left_hip_roll),
+            (self.JOINT.torso, self.JOINT.right_hip_roll),
+            (self.JOINT.torso, self.JOINT.left_hip_pitch),
+            (self.JOINT.torso, self.JOINT.right_hip_pitch),
             (self.JOINT.torso, self.JOINT.left_shoulder_pitch),
-            (self.JOINT.left_shoulder_pitch, self.JOINT.torso),
             (self.JOINT.torso, self.JOINT.right_shoulder_pitch),
-            (self.JOINT.right_shoulder_pitch, self.JOINT.torso),
-
-            # left_shoulder_pitch ↔ left_shoulder_roll and left_elbow
+            (self.JOINT.torso, self.JOINT.left_shoulder_roll),
+            (self.JOINT.torso, self.JOINT.right_shoulder_roll),
+            (self.JOINT.torso, self.JOINT.left_shoulder_yaw),
+            (self.JOINT.torso, self.JOINT.right_shoulder_yaw),
+            # left shoulder pitch
+            (self.JOINT.left_shoulder_pitch, self.JOINT.torso),
             (self.JOINT.left_shoulder_pitch, self.JOINT.left_shoulder_roll),
+            (self.JOINT.left_shoulder_pitch, self.JOINT.left_shoulder_yaw),
+            (self.JOINT.left_shoulder_pitch, self.JOINT.left_elbow),
+            # left shoulder roll
+            (self.JOINT.left_shoulder_roll, self.JOINT.torso),
             (self.JOINT.left_shoulder_roll, self.JOINT.left_shoulder_pitch),
-            (self.JOINT.left_shoulder_yaw, self.JOINT.left_elbow),
-            (self.JOINT.left_elbow, self.JOINT.left_shoulder_yaw),
-
-            # left_shoulder_roll ↔ left_shoulder_yaw
             (self.JOINT.left_shoulder_roll, self.JOINT.left_shoulder_yaw),
+            (self.JOINT.left_shoulder_roll, self.JOINT.left_elbow),
+            # left shoulder yaw
+            (self.JOINT.left_shoulder_yaw, self.JOINT.torso),
             (self.JOINT.left_shoulder_yaw, self.JOINT.left_shoulder_roll),
-
-            # right_shoulder_pitch ↔ right_shoulder_roll and right_elbow
+            (self.JOINT.left_shoulder_yaw, self.JOINT.left_shoulder_pitch),
+            (self.JOINT.left_shoulder_yaw, self.JOINT.left_elbow),
+            # left elbow
+            (self.JOINT.left_elbow, self.JOINT.left_shoulder_roll),
+            (self.JOINT.left_elbow, self.JOINT.left_shoulder_pitch),
+            (self.JOINT.left_elbow, self.JOINT.left_shoulder_yaw),
+            # right shoulder pitch
+            (self.JOINT.right_shoulder_pitch, self.JOINT.torso),
             (self.JOINT.right_shoulder_pitch, self.JOINT.right_shoulder_roll),
+            (self.JOINT.right_shoulder_pitch, self.JOINT.right_shoulder_yaw),
+            (self.JOINT.right_shoulder_pitch, self.JOINT.right_elbow),
+            # right shoulder roll
+            (self.JOINT.right_shoulder_roll, self.JOINT.torso),
             (self.JOINT.right_shoulder_roll, self.JOINT.right_shoulder_pitch),
-            (self.JOINT.right_shoulder_yaw, self.JOINT.right_elbow),
-            (self.JOINT.right_elbow, self.JOINT.right_shoulder_yaw),
-
-            # right_shoulder_roll ↔ right_shoulder_yaw
             (self.JOINT.right_shoulder_roll, self.JOINT.right_shoulder_yaw),
+            (self.JOINT.right_shoulder_roll, self.JOINT.right_elbow),
+            # right shoulder yaw
+            (self.JOINT.right_shoulder_yaw, self.JOINT.torso),
             (self.JOINT.right_shoulder_yaw, self.JOINT.right_shoulder_roll),
+            (self.JOINT.right_shoulder_yaw, self.JOINT.right_shoulder_pitch),
+            (self.JOINT.right_shoulder_yaw, self.JOINT.right_elbow),
+            # right elbow
+            (self.JOINT.right_elbow, self.JOINT.right_shoulder_roll),
+            (self.JOINT.right_elbow, self.JOINT.right_shoulder_pitch),
+            (self.JOINT.right_elbow, self.JOINT.right_shoulder_yaw),
         ]
 
     @property
@@ -126,14 +161,14 @@ class H1(Robot):
         positions[self.JOINT.torso] = (0, 0)
 
         # Left arm (from torso perspective)
-        positions[self.JOINT.left_shoulder_pitch] = (-1, 0.3)
-        positions[self.JOINT.left_shoulder_roll] = (-1.25, 0.6)
+        positions[self.JOINT.left_shoulder_pitch] = (-1, 0.6)
+        positions[self.JOINT.left_shoulder_roll] = (-0.7, 0.3)
         positions[self.JOINT.left_shoulder_yaw] = (-1, 0)
         positions[self.JOINT.left_elbow] = (-1.5, 0.3)
 
         # Right arm (symmetric)
-        positions[self.JOINT.right_shoulder_pitch] = (1, 0.3)
-        positions[self.JOINT.right_shoulder_roll] = (1.25, 0.6)
+        positions[self.JOINT.right_shoulder_pitch] = (1, 0.6)
+        positions[self.JOINT.right_shoulder_roll] = (0.7, 0.3)
         positions[self.JOINT.right_shoulder_yaw] = (1, 0)
         positions[self.JOINT.right_elbow] = (1.5, 0.3)
 

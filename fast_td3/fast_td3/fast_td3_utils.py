@@ -514,7 +514,7 @@ class SimpleReplayBufferGNN(nn.Module):
         self.buffer_size = buffer_size
         self.n_obs = n_obs
         self.n_act = n_act
-        self.n_xpos = 20
+        self.n_xpos = 21
         self.n_critic_obs = n_critic_obs
         self.asymmetric_obs = asymmetric_obs
         self.playground_mode = playground_mode and asymmetric_obs

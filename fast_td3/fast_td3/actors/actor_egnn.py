@@ -16,6 +16,7 @@ class ActorEGNN(nn.Module):
         device: torch.device,
         n_layers: int,
         act_fn: str,
+        env_name: str,
         robot: str = "h1",
         std_min: float = 0.05,
         std_max: float = 0.8,
@@ -55,6 +56,7 @@ class ActorEGNN(nn.Module):
             coords_agg=coords_agg,
             normalize=normalize,
             tanh=tanh,
+            env_name=env_name,
         )
 
         # Initialize noise parameters
@@ -66,9 +68,7 @@ class ActorEGNN(nn.Module):
         self.register_buffer("std_max", torch.as_tensor(std_max, device=device))
 
     def forward(self, obs, xpos) -> torch.Tensor:
-        h, x, edges, edge_attr = self.egnn.build_batched_egnn_input(obs, xpos)
-
-        result = self.egnn(h, x, edges, edge_attr)
+        result = self.egnn(obs, xpos)
 
         return result
 

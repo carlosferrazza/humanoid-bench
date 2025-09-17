@@ -3,6 +3,7 @@ import torch
 
 from fast_td3.robots.graph_builder import GraphBuilder
 
+
 class E_GCL(nn.Module):
     """
     E(n) Equivariant Convolutional Layer
@@ -45,7 +46,7 @@ class E_GCL(nn.Module):
         )
 
         self.node_mlp = nn.Sequential(
-            nn.Linear(hidden_nf + input_nf, hidden_nf),
+            nn.Linear(hidden_nf + input_nf + edges_in_d, hidden_nf),
             act_fn,
             nn.Linear(hidden_nf, output_nf),
         )
@@ -133,11 +134,11 @@ class E_GCL(nn.Module):
         row, col = edge_index
 
         radial, coord_diff = self.coord2radial(edge_index, coord)
-        
+
         edge_feat = self.edge_model(h[row], h[col], radial, edge_attr)
-        
+
         coord = self.coord_model(coord, edge_index, coord_diff, edge_feat)
-        
+
         h, agg = self.node_model(h, edge_index, edge_feat, node_attr)
 
         return h, coord, edge_attr
@@ -155,11 +156,12 @@ class EGNN(nn.Module):
         act_fn,
         n_layers,
         robot,
+        env_name,
         residual=True,
         attention=False,
         normalize=False,
         tanh=False,
-        coords_agg="mean"
+        coords_agg="mean",
     ):
         """
         :param in_node_nf: Number of features for 'h' at the input
@@ -186,113 +188,88 @@ class EGNN(nn.Module):
         self.hidden_nf = hidden_nf
         self.device = device
         self.n_layers = n_layers
-        self.embedding_in = nn.Sequential(
-            nn.Linear(in_node_nf, self.hidden_nf),
-            act_fn
-        )
+        self.out_node_nf = out_node_nf
+        self.embedding_in = nn.Sequential(nn.Linear(in_node_nf, self.hidden_nf), act_fn)
         self.embedding_out = nn.Sequential(
             nn.Linear(self.hidden_nf, out_node_nf),
             nn.Tanh(),
         )
         self.batch_size = batch_size
         # Use ModuleList for fast iteration and to avoid dict lookups
-        self.layers = nn.ModuleList([
-            E_GCL(
-                self.hidden_nf,
-                self.hidden_nf,
-                self.hidden_nf,
-                edges_in_d=in_edge_nf,
-                act_fn=act_fn,
-                residual=residual,
-                attention=attention,
-                normalize=normalize,
-                tanh=tanh,
-                coords_agg=coords_agg,
-            ) for _ in range(n_layers)
-        ])
-        self.robot = robot
+        self.layers = nn.ModuleList(
+            [
+                E_GCL(
+                    self.hidden_nf,
+                    self.hidden_nf,
+                    self.hidden_nf,
+                    edges_in_d=in_edge_nf,
+                    act_fn=act_fn,
+                    residual=residual,
+                    attention=attention,
+                    normalize=normalize,
+                    tanh=tanh,
+                    coords_agg=coords_agg,
+                )
+                for _ in range(n_layers)
+            ]
+        )
         # Ensure all parameters and submodules are on the requested device
         self.to(self.device)
 
-        edge_index, num_nodes, num_edges = GraphBuilder().generate_edge_index(self.batch_size, self.device)
-        self.edge_index = edge_index
-        self.num_nodes = num_nodes
-        self.num_edges = num_edges
-        # Cache for smaller batch sizes to avoid repeated slicing
-        self._edge_cache = {}
+        # no need to learn graph builder
+        self.graph_builder = GraphBuilder(env_name, batch_size, device, robot)
+        self.robot = robot
 
-    def forward(self, h, x, edges, edge_attr):
-        current_batch_size = int(h.shape[0] / self.num_nodes)
+    def forward(self, obs: torch.Tensor, xpos: torch.Tensor) -> torch.Tensor:
+        current_batch_size = obs.shape[0]
+        h, x, edges, edge_attr, node_attr = self.graph_builder.generate_input(obs, xpos)
 
         h = self.embedding_in(h)
-
         for layer in self.layers:
-            h, x, _ = layer(h, edges, x, edge_attr=edge_attr)
-
+            h, x, _ = layer(h, edges, x, edge_attr=edge_attr, node_attr=node_attr)
         h = self.embedding_out(h)
 
-        h = h.view(current_batch_size, self.num_nodes)
+        h = h.view(current_batch_size, h.shape[0] // current_batch_size)
 
-        return h
-
-    def build_batched_egnn_input(self, obs: torch.tensor, xpos: torch.tensor):
-        batch_size = obs.shape[0]
-        if batch_size == self.batch_size:
-            edge_index = self.edge_index
-        else:
-            assert (
-                batch_size <= self.batch_size
-            ), "Batch size exceeds the maximum batch size."
-            if batch_size in self._edge_cache:
-                edge_index= self._edge_cache[batch_size]
-            else:
-                edge_index = [
-                    self.edge_index[0][: batch_size * self.num_edges],
-                    self.edge_index[1][: batch_size * self.num_edges],
-                ]
-                self._edge_cache[batch_size] = edge_index
-
-        # Broadcast subtract base position, then reshape
-        x = (xpos[:, 1:] - xpos[:, [0]]).reshape(-1, 3)
-
-        if self.robot == "h1":
-            # Concatenate features directly to avoid extra stack/squeeze
-            h = torch.cat([obs[:, 32:].reshape(-1, 1), obs[:, 7:26].reshape(-1, 1)], dim=1)  # (B*N, 2)
-        elif self.robot == "g1":
-            h = torch.cat([obs[:, 50:].reshape(-1, 1), obs[:, 7:44].reshape(-1, 1)], dim=1)  # (B*N, 2)
-
-        # if self.in_edge_nf == 0:
-        #     edge_attr = None
-
-        return h, x, edge_index, None
+        return h[:, :19]
 
 
 @torch.jit.script
-def unsorted_segment_sum(data: torch.Tensor, segment_ids: torch.Tensor, num_segments: int) -> torch.Tensor:
+def unsorted_segment_sum(
+    data: torch.Tensor, segment_ids: torch.Tensor, num_segments: int
+) -> torch.Tensor:
     """
     JIT-compiled optimized unsorted segment sum using scatter_add.
     """
-    result = torch.zeros(num_segments, data.size(1), dtype=data.dtype, device=data.device)
+    result = torch.zeros(
+        num_segments, data.size(1), dtype=data.dtype, device=data.device
+    )
     segment_ids_expanded = segment_ids.unsqueeze(-1).expand(-1, data.size(1))
     result.scatter_add_(0, segment_ids_expanded, data)
     return result
 
 
 @torch.jit.script
-def unsorted_segment_mean(data: torch.Tensor, segment_ids: torch.Tensor, num_segments: int) -> torch.Tensor:
+def unsorted_segment_mean(
+    data: torch.Tensor, segment_ids: torch.Tensor, num_segments: int
+) -> torch.Tensor:
     """
     JIT-compiled optimized unsorted segment mean with efficient counting.
     """
-    result = torch.zeros(num_segments, data.size(1), dtype=data.dtype, device=data.device)
+    result = torch.zeros(
+        num_segments, data.size(1), dtype=data.dtype, device=data.device
+    )
     segment_ids_expanded = segment_ids.unsqueeze(-1).expand(-1, data.size(1))
-    
+
     # Sum values
     result.scatter_add_(0, segment_ids_expanded, data)
-    
+
     # Count occurrences
-    count = torch.zeros(num_segments, data.size(1), dtype=data.dtype, device=data.device)
+    count = torch.zeros(
+        num_segments, data.size(1), dtype=data.dtype, device=data.device
+    )
     ones = torch.ones_like(data)
     count.scatter_add_(0, segment_ids_expanded, ones)
-    
+
     # Use torch.where to handle division by zero
     return torch.where(count > 0, result / count, result)

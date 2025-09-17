@@ -56,6 +56,7 @@ def create_actor(
     batch_size,
     device,
     init_scale,
+    env_name,
     model_kwargs,
     actor_hidden_dim=None,
 ):
@@ -87,6 +88,7 @@ def create_actor(
             batch_size=batch_size,
             device=device,
             init_scale=init_scale,
+            env_name=env_name,
             **model_kwargs,
         )
     elif actor_type == "mlp":
@@ -288,7 +290,7 @@ def main():
         critic_obs_normalizer = EmpiricalNormalization(
             shape=n_critic_obs, device=device
         )
-        xpos_normalizer = EmpiricalNormalization(shape=(20, 3), device=device)
+        xpos_normalizer = EmpiricalNormalization(shape=(21, 3), device=device)
     else:
         obs_normalizer = nn.Identity()
         critic_obs_normalizer = nn.Identity()
@@ -307,6 +309,7 @@ def main():
         batch_size=args.batch_size,
         device=device,
         init_scale=args.init_scale,
+        env_name=terminal_args["env_name"],
         model_kwargs=model_kwargs,
         actor_hidden_dim=args.actor_hidden_dim,
     )
@@ -318,6 +321,7 @@ def main():
         batch_size=args.batch_size,
         device=device,
         init_scale=args.init_scale,
+        env_name=terminal_args["env_name"],
         model_kwargs=model_kwargs,
         actor_hidden_dim=args.actor_hidden_dim,
     )

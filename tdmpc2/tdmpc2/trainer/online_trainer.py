@@ -83,6 +83,8 @@ class OnlineTrainer(Trainer):
                     eval_metrics = self.eval()
                     eval_metrics.update(self.common_metrics())
                     self.logger.log(eval_metrics, "eval")
+                    # Add this line to save the model at each evaluation
+                    self.logger.save_agent(self.agent, identifier=f"{self._step}")
                     eval_next = False
 
                 if self._step > 0:

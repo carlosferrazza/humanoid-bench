@@ -30,7 +30,7 @@ defaults:
     script: train
     steps: 1e10
     duration: 0
-    num_envs: 4
+    num_envs: 1
     expl_until: 0
     log_every: 120
     save_every: 900

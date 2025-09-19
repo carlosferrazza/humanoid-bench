@@ -84,8 +84,8 @@ class GraphBuilder:
         # Unpack edge list into two tuples
         src = torch.tensor(src, dtype=torch.long, device=device)
         dst = torch.tensor(dst, dtype=torch.long, device=device)
-        edge_attr = torch.tensor(edge_attr, dtype=torch.long, device=device)
-        node_attr = torch.tensor([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1], dtype=torch.long, device=device)
+        edge_attr = torch.tensor(edge_attr, dtype=torch.float, device=device)
+        node_attr = torch.tensor([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1], dtype=torch.float, device=device)
 
 
         # Create batch offsets and expand edges in one operation

@@ -285,12 +285,23 @@ def main():
         n_critic_obs = n_obs
     action_low, action_high = -1.0, 1.0
 
+    if terminal_args["env_name"] in [
+        "h1-push-v0",
+        "h1-basketball-v0",
+        "h1-package-v0",
+        "h1-sit_hard-v0",
+        "h1-balance_simple-v0",
+    ]: 
+        n_xpos = 21
+    else:
+        n_xpos = 20
+
     if args.obs_normalization:
         obs_normalizer = EmpiricalNormalization(shape=n_obs, device=device)
         critic_obs_normalizer = EmpiricalNormalization(
             shape=n_critic_obs, device=device
         )
-        xpos_normalizer = EmpiricalNormalization(shape=(21, 3), device=device)
+        xpos_normalizer = EmpiricalNormalization(shape=(n_xpos, 3), device=device)
     else:
         obs_normalizer = nn.Identity()
         critic_obs_normalizer = nn.Identity()
@@ -392,6 +403,7 @@ def main():
         n_steps=args.num_steps,
         gamma=args.gamma,
         device=device,
+        env_name=terminal_args["env_name"],
     )
 
     checkpoint_path = terminal_args["checkpoint_path"]

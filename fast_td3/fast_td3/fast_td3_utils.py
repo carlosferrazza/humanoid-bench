@@ -494,6 +494,7 @@ class SimpleReplayBufferGNN(nn.Module):
         n_obs: int,
         n_act: int,
         n_critic_obs: int,
+        env_name=str,
         asymmetric_obs: bool = False,
         playground_mode: bool = False,
         n_steps: int = 1,
@@ -510,11 +511,22 @@ class SimpleReplayBufferGNN(nn.Module):
         """
         super().__init__()
 
+        if env_name in [
+        "h1-push-v0",
+        "h1-basketball-v0",
+        "h1-package-v0",
+        "h1-sit_hard-v0",
+        "h1-balance_simple-v0",
+        ]: 
+            n_xpos = 21
+        else:
+            n_xpos = 20
+
         self.n_env = n_env
         self.buffer_size = buffer_size
         self.n_obs = n_obs
         self.n_act = n_act
-        self.n_xpos = 21
+        self.n_xpos = n_xpos
         self.n_critic_obs = n_critic_obs
         self.asymmetric_obs = asymmetric_obs
         self.playground_mode = playground_mode and asymmetric_obs

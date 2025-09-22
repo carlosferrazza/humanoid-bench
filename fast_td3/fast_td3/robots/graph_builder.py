@@ -136,7 +136,42 @@ class GraphBuilder:
             x = (xpos[:, 1:] - xpos[:, [0]]).reshape(-1, 3)
 
             return h, x, edge_index, None, None
+    # h = qpos concat qvel
+    def generate_input_for_mixed_type(self, obs: torch.tensor, xpos: torch.tensor):
+        current_batch_size = obs.shape[0]
+        if current_batch_size == self.batch_size:
+            edge_index, edge_attr, node_attr = self.edge_index, self.edge_attr, self.node_attr
+        else:
+            assert (
+                current_batch_size <= self.batch_size
+            ), "Batch size exceeds the maximum batch size."
+            if current_batch_size in self._edge_cache:
+                edge_index, edge_attr, node_attr = self._edge_cache[current_batch_size]
+            else:
+                edge_index, edge_attr, node_attr = self._generate_index(current_batch_size, self.device)
+                #print(f"edge_index shape: {edge_index.shape}, edge_attr shape: {edge_attr.shape}, node_attr shape: {node_attr.shape}")
+                self._edge_cache[current_batch_size] = (edge_index, edge_attr, node_attr)
 
+        if self.env_name in env_with_object:
+            #assert obs.shape[1] == 63, f"obs shape: {obs.shape}"
+            #assert xpos.shape[1] == 21, f"xpos shape: {xpos.shape}"
+            h_node = torch.cat(
+                [
+                    obs[:, 7:26].reshape(-1, 1),
+                    obs[:, 39:58].reshape(-1, 1),
+                ],
+                dim=1,
+            )
+            print(h_node.shape)
+            h_object = torch.cat([
+                obs[:, 26:33].reshape(-1, 1),
+                obs[:, 58:65].reshape(-1, 1)
+            ])
+            h_object = h_object.reshape(current_batch_size, - 1)
+            x = (xpos[:, 1:] - xpos[:, [0]]).reshape(-1, 3)
+
+            return h_node, h_object, x, edge_index, edge_attr, node_attr
+        
 
     def visualize_graph(self):
         G = nx.DiGraph()

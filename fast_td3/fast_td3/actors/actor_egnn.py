@@ -57,6 +57,7 @@ class ActorEGNN(nn.Module):
             normalize=normalize,
             tanh=tanh,
             env_name=env_name,
+            object_node_nf=13
         )
 
         # Initialize noise parameters

@@ -162,9 +162,11 @@ class EGNN(nn.Module):
         normalize=False,
         tanh=False,
         coords_agg="mean",
+        object_node_nf=None,
     ):
         """
-        :param in_node_nf: Number of features for 'h' at the input
+        :param in_node_nf: Number of features for 'h' at the input (backward compatibility)
+        :param object_node_nf: Number of features for object nodes (if different from in_node_nf)
         :param hidden_nf: Number of hidden features
         :param out_node_nf: Number of features for 'h' at the output
         :param in_edge_nf: Number of features for the edge features
@@ -189,7 +191,17 @@ class EGNN(nn.Module):
         self.device = device
         self.n_layers = n_layers
         self.out_node_nf = out_node_nf
-        self.embedding_in = nn.Sequential(nn.Linear(in_node_nf, self.hidden_nf), act_fn)
+
+        self.has_mixed_node_types = object_node_nf is not None
+
+        if self.has_mixed_node_types:
+            # Separate embedding layers for different node types
+            self.joint_embedding_in = nn.Sequential(nn.Linear(in_node_nf, self.hidden_nf), act_fn)
+            self.object_embedding_in = nn.Sequential(nn.Linear(object_node_nf, self.hidden_nf), act_fn)
+        else:
+            # Single embedding layer for backward compatibility
+            self.embedding_in = nn.Sequential(nn.Linear(in_node_nf, self.hidden_nf), act_fn)
+            
         self.embedding_out = nn.Sequential(
             nn.Linear(self.hidden_nf, out_node_nf),
             nn.Tanh(),
@@ -222,9 +234,16 @@ class EGNN(nn.Module):
 
     def forward(self, obs: torch.Tensor, xpos: torch.Tensor) -> torch.Tensor:
         current_batch_size = obs.shape[0]
-        h, x, edges, edge_attr, node_attr = self.graph_builder.generate_input(obs, xpos)
+        h_joint, h_object, x, edges, edge_attr, node_attr = self.graph_builder.generate_input_for_mixed_type(obs, xpos)
 
-        h = self.embedding_in(h)
+        if self.has_mixed_node_types and node_attr is not None:
+            h_joint_embedded = self.joint_embedding_in(h_joint)
+            h_object_embedded = self.object_embedding_in(h_object)
+            h = torch.cat([h_joint_embedded, h_object_embedded], dim=0)
+        else:
+            # Single node type or backward compatibility
+            h = self.embedding_in(h_joint)
+            
         for layer in self.layers:
             h, x, _ = layer(h, edges, x, edge_attr=edge_attr, node_attr=node_attr)
         h = self.embedding_out(h)

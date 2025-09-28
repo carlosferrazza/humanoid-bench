@@ -15,7 +15,7 @@ core_requirements = [
     "imageio==2.34.2",
     "gymnax==0.0.8",
     "brax==0.9.4",
-    "torch==2.3.1",
+    #"torch==2.3.1",
     "opencv-python==4.10.0.84",
     "natsort==8.4.0",
 ]

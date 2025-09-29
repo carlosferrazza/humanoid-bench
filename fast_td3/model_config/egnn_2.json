@@ -1,7 +1,0 @@
-{
-    "hidden_dim": 82,
-    "n_layers": 4,
-    "act_fn": "relu",
-    "n_edge_feat": 1,
-    "normalize": true
-}

@@ -3,6 +3,34 @@ import torch
 
 from fast_td3.robots.graph_builder import GraphBuilder
 
+# Configure PyTorch compiler for dynamic shapes
+torch._dynamo.config.capture_dynamic_output_shape_ops = True
+
+
+# Environment classification for object inclusion
+env_with_object = [
+    "h1-push-v0", # medium
+    "h1-basketball-v0", # very hard
+    "h1-package-v0", # medium
+    "h1-sit_hard-v0", # hard
+    "h1-balance_simple-v0", # hard
+]
+
+env_without_object = [
+    "h1-walk-v0",
+    "h1-reach-v0",
+    "h1-hurdle-v0",
+    "h1-crawl-v0",
+    "h1-maze-v0",
+    "h1-highbar_simple-v0",
+    "h1-stand-v0",
+    "h1-run-v0",
+    "h1-sit_simple-v0",
+    "h1-stairs-v0",
+    "h1-slide-v0",
+    "h1-pole-v0",
+]
+
 
 class E_GCL(nn.Module):
     """
@@ -27,6 +55,7 @@ class E_GCL(nn.Module):
         normalize=False,
         coords_agg="mean",
         tanh=False,
+        edge_coords_nf=1,
     ):
         super(E_GCL, self).__init__()
         input_edge = input_nf * 2
@@ -36,7 +65,6 @@ class E_GCL(nn.Module):
         self.coords_agg = coords_agg
         self.tanh = tanh
         self.epsilon = 1e-8
-        edge_coords_nf = 1
 
         self.edge_mlp = nn.Sequential(
             nn.Linear(input_edge + edge_coords_nf + edges_in_d, hidden_nf),
@@ -76,9 +104,9 @@ class E_GCL(nn.Module):
         coord_diff = coord[row] - coord[col]
         radial = coord_diff.pow(2).sum(dim=1, keepdim=True)
 
-        if self.normalize:
-            norm = torch.sqrt(radial).detach() + self.epsilon
-            coord_diff = coord_diff / norm
+        # if self.normalize:
+        #     norm = torch.sqrt(radial).detach() + self.epsilon
+        #     coord_diff = coord_diff / norm
 
         return radial, coord_diff
 
@@ -112,6 +140,7 @@ class E_GCL(nn.Module):
         else:
             raise Exception(f"Wrong coords_agg parameter: {self.coords_agg}")
         coord = coord + agg
+        coord = torch.clamp(coord, -10, 10)
         return coord
 
     def node_model(self, x, edge_index, edge_attr, node_attr):
@@ -221,6 +250,7 @@ class EGNN(nn.Module):
                     normalize=normalize,
                     tanh=tanh,
                     coords_agg=coords_agg,
+                    edge_coords_nf=1
                 )
                 for _ in range(n_layers)
             ]
@@ -231,23 +261,106 @@ class EGNN(nn.Module):
         # no need to learn graph builder
         self.graph_builder = GraphBuilder(env_name, batch_size, device, robot)
         self.robot = robot
+        self.env_name = env_name
+        
+        # Move caching from GraphBuilder to EGNN
+        self.edge_index, self.edge_attr, self.node_attr = self._generate_index(batch_size, device)
+        self._edge_cache = {}
+        self.num_edges = self.graph_builder.robot.joint_connections.__len__()
+        
+        # Pre-compute edge indices for common batch sizes to avoid repeated computation
+        common_batch_sizes = [1, 4, 16, 128, 8192]
+        self._precomputed_edges = {}
+        for bs in common_batch_sizes:
+            if bs <= batch_size:
+                try:
+                    self._precomputed_edges[bs] = self._generate_index(bs, device)
+                except RuntimeError:
+                    # Skip if out of memory for very large batch sizes
+                    break
+
+    def _generate_index(self, batch_size: int, device="cuda"):
+        """Generate edge indices, edge attributes, and node attributes for given batch size."""
+        edge_attr = []
+        node_attr = []
+
+        if self.env_name in env_with_object:
+            object_node_id = self.graph_builder.robot.OBJECT.free_object
+            src, dst = zip(*self.graph_builder.robot.joint_connections_with_object)
+            node_attr = [0] * (len(self.graph_builder.robot.JOINT)) + [1]  # last node is object node
+
+            # Create edge_attr: 1 if edge involves object_node_id, else 0
+            for s, d in zip(src, dst):
+                if s == object_node_id or d == object_node_id:
+                    edge_attr.append(1)
+                else:
+                    edge_attr.append(0)
+        else:
+            src, dst = zip(*self.graph_builder.robot.joint_connections)
+            node_attr = [0] * (len(self.graph_builder.robot.JOINT))  # All joint nodes
+            edge_attr = [0] * len(src)  # All edges are joint-to-joint
+
+        # Unpack edge list into two tuples
+        src = torch.tensor(src, dtype=torch.long, device=device)
+        dst = torch.tensor(dst, dtype=torch.long, device=device)
+        edge_attr = torch.tensor(edge_attr, dtype=torch.float, device=device)
+        node_attr = torch.tensor(node_attr, dtype=torch.float, device=device)
+
+        # Create batch offsets and expand edges in one operation
+        offsets = torch.arange(batch_size, device=device) * (len(self.graph_builder.robot.JOINT) + 1 if self.env_name in env_with_object else 0)
+        src_batch = (src.unsqueeze(0) + offsets.unsqueeze(1)).flatten().to(device)
+        dst_batch = (dst.unsqueeze(0) + offsets.unsqueeze(1)).flatten().to(device)
+        edge_attr_batch = edge_attr.repeat(batch_size).to(device).unsqueeze(-1)
+        node_attr_batch = node_attr.repeat(batch_size).to(device).unsqueeze(-1)
+
+        return torch.stack([src_batch, dst_batch]), edge_attr_batch, node_attr_batch
+
+    def _get_cached_edges(self, current_batch_size: int):
+        """Optimized method to get edge indices with pre-computed cache lookup."""
+        # Check pre-computed edges first (fastest)
+        if current_batch_size in self._precomputed_edges:
+            return self._precomputed_edges[current_batch_size]
+        
+        # Check runtime cache
+        if current_batch_size in self._edge_cache:
+            return self._edge_cache[current_batch_size]
+        
+        # Generate and cache
+        edge_data = self._generate_index(current_batch_size, self.device)
+        self._edge_cache[current_batch_size] = edge_data
+        return edge_data
 
     def forward(self, obs: torch.Tensor, xpos: torch.Tensor) -> torch.Tensor:
         current_batch_size = obs.shape[0]
-        h_joint, h_object, x, edges, edge_attr, node_attr = self.graph_builder.generate_input_for_mixed_type(obs, xpos)
+
+        # Get cached edge data for current batch size
+        edges, edge_attr, node_attr = self._get_cached_edges(current_batch_size)
+        if not self.has_mixed_node_types:
+            edge_attr = None
+            node_attr = None
+
+        if self.has_mixed_node_types:
+            h_joint, h_object, x = self.graph_builder.generate_input_for_mixed_type(obs, xpos)
+        else:
+            h, x = self.graph_builder.generate_input(obs, xpos)
 
         if self.has_mixed_node_types and node_attr is not None:
             h_joint_embedded = self.joint_embedding_in(h_joint)
             h_object_embedded = self.object_embedding_in(h_object)
             h = torch.cat([h_joint_embedded, h_object_embedded], dim=0)
         else:
-            # Single node type or backward compatibility
-            h = self.embedding_in(h_joint)
+            h = self.embedding_in(h)
+    
+        for i, layer in enumerate(self.layers):
+            # print(f"Layer {i} x min: {x.min()}, max: {x.max()}, mean: {x.mean()}")
+            h, x, _ = layer(h=h, edge_index=edges, coord=x, edge_attr=edge_attr, node_attr=node_attr)
             
-        for layer in self.layers:
-            h, x, _ = layer(h, edges, x, edge_attr=edge_attr, node_attr=node_attr)
-        h = self.embedding_out(h)
+        # Check for NaN after all layers (moved outside compiled function for debugging)
+        if torch.isnan(x).any():
+            print(f"[NaN Debug] NaN detected in coordinates after forward pass")
+            print(f"x stats - min: {x.min()}, max: {x.max()}, mean: {x.mean()}")
 
+        h = self.embedding_out(h)
         h = h.view(current_batch_size, h.shape[0] // current_batch_size)
 
         return h[:, :19]
@@ -257,38 +370,23 @@ class EGNN(nn.Module):
 def unsorted_segment_sum(
     data: torch.Tensor, segment_ids: torch.Tensor, num_segments: int
 ) -> torch.Tensor:
-    """
-    JIT-compiled optimized unsorted segment sum using scatter_add.
-    """
-    result = torch.zeros(
-        num_segments, data.size(1), dtype=data.dtype, device=data.device
-    )
-    segment_ids_expanded = segment_ids.unsqueeze(-1).expand(-1, data.size(1))
-    result.scatter_add_(0, segment_ids_expanded, data)
-    return result
+    num_feats = data.size(1)
+    sums = data.new_zeros((num_segments, num_feats))  # [S, D]
+    # One pass accumulation of sums
+    sums.index_add_(0, segment_ids, data)
+
+    return sums
 
 
 @torch.jit.script
 def unsorted_segment_mean(
     data: torch.Tensor, segment_ids: torch.Tensor, num_segments: int
 ) -> torch.Tensor:
-    """
-    JIT-compiled optimized unsorted segment mean with efficient counting.
-    """
-    result = torch.zeros(
-        num_segments, data.size(1), dtype=data.dtype, device=data.device
-    )
-    segment_ids_expanded = segment_ids.unsqueeze(-1).expand(-1, data.size(1))
+    num_feats = data.size(1)
+    sums = data.new_zeros((num_segments, num_feats))  # [S, D]
+    # One pass accumulation of sums
+    sums.index_add_(0, segment_ids, data)
 
-    # Sum values
-    result.scatter_add_(0, segment_ids_expanded, data)
-
-    # Count occurrences
-    count = torch.zeros(
-        num_segments, data.size(1), dtype=data.dtype, device=data.device
-    )
-    ones = torch.ones_like(data)
-    count.scatter_add_(0, segment_ids_expanded, ones)
-
-    # Use torch.where to handle division by zero
-    return torch.where(count > 0, result / count, result)
+    # Counts per segment (no expansion). bincount is efficient on GPU for large N.
+    counts = torch.bincount(segment_ids, minlength=num_segments).clamp_min(1).unsqueeze(-1)
+    return sums / counts

@@ -354,7 +354,7 @@ class EGNN(nn.Module):
             num_nodes_per_batch = len(self.graph_builder.robot.JOINT) + (1 if self.env_name in env_with_object else 0)
             
             # Initialize h with the correct shape
-            h = torch.zeros(current_batch_size * num_nodes_per_batch, self.hidden_nf, device=self.device)
+            h = torch.zeros(current_batch_size * num_nodes_per_batch, self.hidden_nf, device=self.device, dtype=h_joint_embedded.dtype)
             
             # Create masks for joint and object node positions
             joint_mask = node_attr.squeeze(-1) == 0  # Joint nodes have attribute 0

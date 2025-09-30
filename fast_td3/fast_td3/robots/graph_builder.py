@@ -82,26 +82,23 @@ class GraphBuilder:
         return h, x
     
     # h = qpos concat qvel
-    @torch.compile
+    # @torch.compile
     def generate_input_for_mixed_type(self, obs: torch.tensor, xpos: torch.tensor):
         if self.env_name in env_with_object:
             current_batch_size = obs.shape[0]
             #assert obs.shape[1] == 63, f"obs shape: {obs.shape}"
             #assert xpos.shape[1] == 21, f"xpos shape: {xpos.shape}"
-            # More efficient feature extraction for joint nodes
-            h_node = torch.stack([
-                obs[:, 7:26].view(-1, 1),
-                obs[:, 39:58].view(-1, 1),
-            ], dim=1).squeeze(-1)
+            h_node = torch.cat([
+                obs[:, 7:26].reshape(-1, 1),
+                obs[:, 39:58].reshape(-1, 1),
+            ], dim=1)
             
-            # More efficient feature extraction for object nodes
-            h_object = torch.stack([
-                obs[:, 26:33].view(current_batch_size, -1),
-                obs[:, 58:64].view(current_batch_size, -1)
-            ], dim=1).view(current_batch_size, -1)
+            h_object = torch.cat([
+                obs[:, 26:33].reshape(current_batch_size, -1),
+                obs[:, 58:63].reshape(current_batch_size, -1)
+            ], dim=1)
 
-            # Optimized coordinate computation
-            x = (xpos[:, 1:].view(-1, 3) - xpos[:, [0]].view(current_batch_size, 1, 3).expand(-1, xpos.shape[1] - 1, -1).reshape(-1, 3))
+            x = (xpos[:, 1:] - xpos[:, [0]]).reshape(-1, 3)
 
             return h_node, h_object, x
         

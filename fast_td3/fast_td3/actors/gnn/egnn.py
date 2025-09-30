@@ -307,7 +307,7 @@ class EGNN(nn.Module):
         node_attr = torch.tensor(node_attr, dtype=torch.float, device=device)
 
         # Create batch offsets and expand edges in one operation
-        offsets = torch.arange(batch_size, device=device) * (len(self.graph_builder.robot.JOINT) + 1 if self.env_name in env_with_object else 0)
+        offsets = torch.arange(batch_size, device=device) * (len(self.graph_builder.robot.JOINT) + (1 if self.env_name in env_with_object else 0))
         src_batch = (src.unsqueeze(0) + offsets.unsqueeze(1)).flatten().to(device)
         dst_batch = (dst.unsqueeze(0) + offsets.unsqueeze(1)).flatten().to(device)
         edge_attr_batch = edge_attr.repeat(batch_size).to(device).unsqueeze(-1)
@@ -342,12 +342,29 @@ class EGNN(nn.Module):
         if self.has_mixed_node_types:
             h_joint, h_object, x = self.graph_builder.generate_input_for_mixed_type(obs, xpos)
         else:
+            # shape [batch * num_nodes, 2]
             h, x = self.graph_builder.generate_input(obs, xpos)
 
         if self.has_mixed_node_types and node_attr is not None:
             h_joint_embedded = self.joint_embedding_in(h_joint)
             h_object_embedded = self.object_embedding_in(h_object)
-            h = torch.cat([h_joint_embedded, h_object_embedded], dim=0)
+            
+            # Create a mask to properly interleave joint and object nodes
+            # node_attr: 0 for joint nodes, 1 for object nodes
+            num_nodes_per_batch = len(self.graph_builder.robot.JOINT) + (1 if self.env_name in env_with_object else 0)
+            
+            # Initialize h with the correct shape
+            h = torch.zeros(current_batch_size * num_nodes_per_batch, self.hidden_nf, device=self.device)
+            
+            # Create masks for joint and object node positions
+            joint_mask = node_attr.squeeze(-1) == 0  # Joint nodes have attribute 0
+            object_mask = node_attr.squeeze(-1) == 1  # Object nodes have attribute 1
+            
+            # Place joint embeddings at joint positions
+            h[joint_mask] = h_joint_embedded
+            
+            # Place object embeddings at object positions
+            h[object_mask] = h_object_embedded
         else:
             h = self.embedding_in(h)
     
@@ -357,7 +374,7 @@ class EGNN(nn.Module):
             
         # Check for NaN after all layers (moved outside compiled function for debugging)
         if torch.isnan(x).any():
-            print(f"[NaN Debug] NaN detected in coordinates after forward pass")
+            print("[NaN Debug] NaN detected in coordinates after forward pass")
             print(f"x stats - min: {x.min()}, max: {x.max()}, mean: {x.mean()}")
 
         h = self.embedding_out(h)

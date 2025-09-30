@@ -21,7 +21,7 @@ class ActorEGNN(nn.Module):
         std_min: float = 0.05,
         std_max: float = 0.8,
         n_node_feat: int = 2,
-        n_edge_feat: int = 1,
+        n_edge_feat: int = 0,
         attention: bool = False,
         coords_agg: str = "mean",
         normalize: bool = False,

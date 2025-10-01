@@ -264,7 +264,7 @@ class EGNN(nn.Module):
         self.env_name = env_name
         
         # Move caching from GraphBuilder to EGNN
-        self.edge_index, self.edge_attr, self.node_attr = self._generate_index(batch_size, device)
+        self.edge_index, self.edge_attr, self.node_attr = self.generate_index(batch_size, device)
         self._edge_cache = {}
         self.num_edges = self.graph_builder.robot.joint_connections.__len__()
         
@@ -274,12 +274,12 @@ class EGNN(nn.Module):
         for bs in common_batch_sizes:
             if bs <= batch_size:
                 try:
-                    self._precomputed_edges[bs] = self._generate_index(bs, device)
+                    self._precomputed_edges[bs] = self.generate_index(bs, device)
                 except RuntimeError:
                     # Skip if out of memory for very large batch sizes
                     break
 
-    def _generate_index(self, batch_size: int, device="cuda"):
+    def generate_index(self, batch_size: int, device="cuda"):
         """Generate edge indices, edge attributes, and node attributes for given batch size."""
         edge_attr = []
         node_attr = []
@@ -326,7 +326,7 @@ class EGNN(nn.Module):
             return self._edge_cache[current_batch_size]
         
         # Generate and cache
-        edge_data = self._generate_index(current_batch_size, self.device)
+        edge_data = self.generate_index(current_batch_size, self.device)
         self._edge_cache[current_batch_size] = edge_data
         return edge_data
 
@@ -360,10 +360,7 @@ class EGNN(nn.Module):
             joint_mask = node_attr.squeeze(-1) == 0  # Joint nodes have attribute 0
             object_mask = node_attr.squeeze(-1) == 1  # Object nodes have attribute 1
             
-            # Place joint embeddings at joint positions
             h[joint_mask] = h_joint_embedded
-            
-            # Place object embeddings at object positions
             h[object_mask] = h_object_embedded
         else:
             h = self.embedding_in(h)
@@ -383,27 +380,21 @@ class EGNN(nn.Module):
         return h[:, :19]
 
 
-@torch.jit.script
-def unsorted_segment_sum(
-    data: torch.Tensor, segment_ids: torch.Tensor, num_segments: int
-) -> torch.Tensor:
-    num_feats = data.size(1)
-    sums = data.new_zeros((num_segments, num_feats))  # [S, D]
-    # One pass accumulation of sums
-    sums.index_add_(0, segment_ids, data)
-
-    return sums
+@torch.compile(dynamic=True)
+def unsorted_segment_sum(data, segment_ids, num_segments):
+    result_shape = (num_segments, data.size(1))
+    result = data.new_full(result_shape, 0)  # Init empty result tensor.
+    segment_ids = segment_ids.unsqueeze(-1).expand(-1, data.size(1))
+    result.scatter_add_(0, segment_ids, data)
+    return result
 
 
-@torch.jit.script
-def unsorted_segment_mean(
-    data: torch.Tensor, segment_ids: torch.Tensor, num_segments: int
-) -> torch.Tensor:
-    num_feats = data.size(1)
-    sums = data.new_zeros((num_segments, num_feats))  # [S, D]
-    # One pass accumulation of sums
-    sums.index_add_(0, segment_ids, data)
-
-    # Counts per segment (no expansion). bincount is efficient on GPU for large N.
-    counts = torch.bincount(segment_ids, minlength=num_segments).clamp_min(1).unsqueeze(-1)
-    return sums / counts
+torch.compile(dynamic=True)
+def unsorted_segment_mean(data, segment_ids, num_segments):
+    result_shape = (num_segments, data.size(1))
+    segment_ids = segment_ids.unsqueeze(-1).expand(-1, data.size(1))
+    result = data.new_full(result_shape, 0)  # Init empty result tensor.
+    count = data.new_full(result_shape, 0)
+    result.scatter_add_(0, segment_ids, data)
+    count.scatter_add_(0, segment_ids, torch.ones_like(data))
+    return result / count.clamp(min=1)

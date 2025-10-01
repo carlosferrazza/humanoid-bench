@@ -5,7 +5,7 @@ import matplotlib.patches as patches
 import torch
 import torch._dynamo
 
-from .H1 import H1
+from .h1 import H1
 
 
 class NodeType(enum.IntEnum):

@@ -37,6 +37,7 @@ from fast_td3.actors import (
     ActorHEPI,
     ActorAEGNN,
     ActorPONITA,
+    ActorHEGNN
 )
 from fast_td3.hyperparams import HumanoidBenchArgs
 import argparse
@@ -138,6 +139,17 @@ def create_actor(
             robot="h1",
             **model_kwargs,
         )
+    elif actor_type == "hegnn":
+        return ActorHEGNN(
+            n_obs=n_obs,
+            n_act=n_act,
+            num_envs=num_envs,
+            batch_size=batch_size,
+            device=device,
+            init_scale=init_scale,
+            env_name=env_name,
+            **model_kwargs,
+        )
     else:
         raise ValueError(
             f"Unsupported actor type: {actor_type}. Supported types are: egnn, mlp, mpnn, hepi"
@@ -151,7 +163,7 @@ def main():
         type=str,
         default="egnn",
         help="The kind of actor to use.",
-        choices=["egnn", "mlp", "mpnn", "hepi", "aegnn", "ponita"],
+        choices=["egnn", "mlp", "mpnn", "hepi", "aegnn", "ponita", "hegnn"],
     )
     parser.add_argument("--env_name", type=str, default="h1-stand-v0")
     parser.add_argument(

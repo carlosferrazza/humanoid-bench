@@ -107,23 +107,27 @@ class TypeAwareE_GCL(nn.Module):
 
         return radial, coord_diff
 
-    def edge_model(self, source, target, radial, joint_indices=None, object_indices=None):
-        # Initialize output tensor
-        out = torch.zeros(
+    def edge_model(self, source, target, radial, edge_attr):
+        # Process edges with separate MLPs based on edge type (from edge_attr)
+        inp = torch.cat([source, target, radial], dim=1)
+        
+        # edge_attr: 0 = joint-to-joint edge, 1 = joint-to-object edge
+        joint_edge_mask = (edge_attr.squeeze(-1) == 0)
+        object_edge_mask = (edge_attr.squeeze(-1) == 1)
+        
+        # Process both edge types
+        joint_out = self.edge_mlp_joint(inp[joint_edge_mask])
+        object_out = self.edge_mlp_object(inp[object_edge_mask])
+        
+        # Combine outputs
+        out = torch.empty(
             source.shape[0], 
             self.edge_mlp_joint[-2].out_features,
             device=source.device,
             dtype=source.dtype
         )
-
-        # Process joint-to-joint edges
-        inp = torch.cat([
-            source, 
-            target, 
-            radial
-        ], dim=1)
-        out[joint_indices] = self.edge_mlp_joint(inp[joint_indices])
-        out[object_indices] = self.edge_mlp_object(inp[object_indices])
+        out[joint_edge_mask] = joint_out
+        out[object_edge_mask] = object_out
 
         if self.attention:
             att_val = self.att_mlp(out)
@@ -131,7 +135,7 @@ class TypeAwareE_GCL(nn.Module):
 
         return out
 
-    def coord_model(self, coord, edge_index, coord_diff, edge_feat, joint_indices=None, object_indices=None):
+    def coord_model(self, coord, edge_index, coord_diff, edge_feat, edge_attr):
         """
         Type-aware coordinate update.
         Uses different update rules for joint vs object edges.
@@ -139,10 +143,19 @@ class TypeAwareE_GCL(nn.Module):
         """
         
         row, col = edge_index
+        
+        # edge_attr: 0 = joint-to-joint edge, 1 = joint-to-object edge
+        joint_edge_mask = (edge_attr.squeeze(-1) == 0)
+        object_edge_mask = (edge_attr.squeeze(-1) == 1)
     
-        trans = torch.zeros_like(coord_diff)
-        trans[joint_indices] = coord_diff[joint_indices] * self.coord_mlp_joint(edge_feat[joint_indices])
-        trans[object_indices] = coord_diff[object_indices] * self.coord_mlp_object(edge_feat[object_indices])
+        # Compute transformations for both edge types
+        trans_joint = coord_diff[joint_edge_mask] * self.coord_mlp_joint(edge_feat[joint_edge_mask])
+        trans_object = coord_diff[object_edge_mask] * self.coord_mlp_object(edge_feat[object_edge_mask])
+        
+        # Combine transformations
+        trans = torch.empty_like(coord_diff)
+        trans[joint_edge_mask] = trans_joint
+        trans[object_edge_mask] = trans_object
 
         # Aggregate coordinate updates
         if self.coords_agg == 'sum':
@@ -155,7 +168,7 @@ class TypeAwareE_GCL(nn.Module):
         coord = coord + agg.clamp(-10, 10)
         return coord
 
-    def node_model(self, x, edge_index, edge_feat, joint_indices=None, object_indices=None):
+    def node_model(self, x, edge_index, edge_feat, node_attr):
         """
         Type-aware node feature update.
         Uses different MLPs for joint and object nodes.
@@ -165,19 +178,28 @@ class TypeAwareE_GCL(nn.Module):
         row, col = edge_index
         agg = unsorted_segment_sum(edge_feat, row, num_segments=x.size(0))
 
-        out = torch.zeros_like(x)
-
-        # Process joint nodes
-        agg = torch.cat([x, agg], dim=1)
-        out[joint_indices] = self.node_mlp_joint(agg[joint_indices])
-        out[object_indices] = self.node_mlp_object(agg[object_indices])
+        # Concatenate node features with aggregated edge features
+        agg_input = torch.cat([x, agg], dim=1)
+        
+        # node_attr: 0 = joint node, 1 = object node
+        joint_node_mask = (node_attr.squeeze(-1) == 0)
+        object_node_mask = (node_attr.squeeze(-1) == 1)
+        
+        # Process both node types
+        joint_out = self.node_mlp_joint(agg_input[joint_node_mask])
+        object_out = self.node_mlp_object(agg_input[object_node_mask])
+        
+        # Combine outputs
+        out = torch.empty_like(x)
+        out[joint_node_mask] = joint_out
+        out[object_node_mask] = object_out
 
         if self.residual:
             out = x + out
 
-        return out, agg
+        return out, agg_input
 
-    def forward(self, h, edge_index, coord, edge_attr, node_attr, joint_indices=None, object_indices=None):
+    def forward(self, h, edge_index, coord, edge_attr, node_attr):
         """
         Forward pass - requires both edge_attr and node_attr.
         """
@@ -188,11 +210,11 @@ class TypeAwareE_GCL(nn.Module):
 
         radial, coord_diff = self.coord2radial(edge_index, coord)
 
-        edge_feat = self.edge_model(h[row], h[col], radial, joint_indices=joint_indices, object_indices=object_indices)
+        edge_feat = self.edge_model(h[row], h[col], radial, edge_attr)
 
-        coord = self.coord_model(coord, edge_index, coord_diff, edge_feat, joint_indices=joint_indices, object_indices=object_indices)
+        coord = self.coord_model(coord, edge_index, coord_diff, edge_feat, edge_attr)
 
-        h, agg = self.node_model(h, edge_index, edge_feat, joint_indices=joint_indices, object_indices=object_indices)
+        h, agg = self.node_model(h, edge_index, edge_feat, node_attr)
 
         return h, coord, edge_attr
 
@@ -410,7 +432,7 @@ class TypeAwareEGNN(nn.Module):
         # Message passing with type-aware layers
         for layer in self.layers:
             h, x, _ = layer(
-                h=h, edge_index=edges, coord=x, edge_attr=edge_attr, node_attr=node_attr, joint_indices=joint_indices, object_indices=object_indices
+                h=h, edge_index=edges, coord=x, edge_attr=edge_attr, node_attr=node_attr
             )
 
         # Process output with separate heads

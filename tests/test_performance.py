@@ -106,11 +106,15 @@ def benchmark_function(fn: Callable, data: torch.Tensor, segment_ids: torch.Tens
     elif device == "mps":
         # MPS synchronization and timing
         torch.mps.synchronize()
-        t0 = time.time()
+        start = torch.mps.Event(enable_timing=True)
+        end = torch.mps.Event(enable_timing=True)
+
+        start.record()
         for _ in range(iters):
             fn(data, segment_ids, num_segments)
+        end.record()
         torch.mps.synchronize()
-        return (time.time() - t0) * 1000 / iters  # ms per call
+        return start.elapsed_time(end) / iters  # ms per call
     else:
         t0 = time.time()
         for _ in range(iters):
@@ -234,8 +238,6 @@ class TestPerformance:
         if device == "cpu":
             pytest.skip("Performance tests skipped on CPU")
 
-        print(segment_ids[:100])
-        
         time_old = benchmark_function(
             unsorted_segment_sum_old, data, segment_ids, num_segments, device, iters=50
         )

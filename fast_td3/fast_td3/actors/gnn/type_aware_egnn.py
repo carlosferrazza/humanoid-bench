@@ -146,27 +146,19 @@ class TypeAwareE_GCL(nn.Module):
 
         return out
 
-    def coord_model(self, coord, edge_index, coord_diff, edge_feat, edge_attr):
+    def coord_model(self, coord, edge_index, coord_diff, edge_feat, joint_indices=None, object_indices=None):
         """
         Type-aware coordinate update.
         Uses different update rules for joint vs object edges.
         Requires edge_attr to distinguish edge types.
         """
-        assert edge_attr is not None, "TypeAwareE_GCL requires edge_attr"
         
         row, col = edge_index
-
-        # Type-specific coordinate updates
-        is_object_edge = edge_attr.squeeze(-1) > 0.5
-        joint_mask = ~is_object_edge
+        
 
         trans = torch.zeros_like(coord_diff)
-
-        if joint_mask.any():
-            trans[joint_mask] = coord_diff[joint_mask] * self.coord_mlp_joint(edge_feat[joint_mask])
-        
-        if is_object_edge.any():
-            trans[is_object_edge] = coord_diff[is_object_edge] * self.coord_mlp_object(edge_feat[is_object_edge])
+        trans[joint_indices] = coord_diff[joint_indices] * self.coord_mlp_joint(edge_feat[joint_indices])
+        trans[object_indices] = coord_diff[object_indices] * self.coord_mlp_object(edge_feat[object_indices])
 
         # Aggregate coordinate updates
         if self.coords_agg == 'sum':
@@ -211,7 +203,7 @@ class TypeAwareE_GCL(nn.Module):
 
         return out, agg
 
-    def forward(self, h, edge_index, coord, edge_attr, node_attr):
+    def forward(self, h, edge_index, coord, edge_attr, node_attr, joint_indices=None, object_indices=None):
         """
         Forward pass - requires both edge_attr and node_attr.
         """
@@ -224,7 +216,7 @@ class TypeAwareE_GCL(nn.Module):
 
         edge_feat = self.edge_model(h[row], h[col], radial, edge_attr)
 
-        coord = self.coord_model(coord, edge_index, coord_diff, edge_feat, edge_attr)
+        coord = self.coord_model(coord, edge_index, coord_diff, edge_feat, joint_indices=joint_indices, object_indices=object_indices)
 
         h, agg = self.node_model(h, edge_index, edge_feat, node_attr)
 
@@ -444,7 +436,7 @@ class TypeAwareEGNN(nn.Module):
         # Message passing with type-aware layers
         for layer in self.layers:
             h, x, _ = layer(
-                h=h, edge_index=edges, coord=x, edge_attr=edge_attr, node_attr=node_attr
+                h=h, edge_index=edges, coord=x, edge_attr=edge_attr, node_attr=node_attr, joint_indices=joint_indices, object_indices=object_indices
             )
 
         # Process output with separate heads

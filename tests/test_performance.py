@@ -86,8 +86,7 @@ def small_test_data(device):
     return data, segment_ids, num_segments
 
 
-def benchmark_function(fn: Callable, data: torch.Tensor, segment_ids: torch.Tensor, 
-                      num_segments: int, device: str, iters: int = 100) -> float:
+def benchmark_function(fn: Callable, data: torch.Tensor, segment_ids: torch.Tensor, num_segments: int, device: str, iters: int = 100) -> float:
     """Benchmark a function and return average time per call in milliseconds."""
     # Warm-up
     for _ in range(5):

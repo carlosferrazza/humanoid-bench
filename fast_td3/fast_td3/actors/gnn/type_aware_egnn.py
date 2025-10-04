@@ -107,13 +107,7 @@ class TypeAwareE_GCL(nn.Module):
 
         return radial, coord_diff
 
-    def edge_model(self, source, target, radial, edge_attr):
-        assert edge_attr is not None, "TypeAwareE_GCL requires edge_attr"
-        
-        # Separate edges by type
-        is_object_edge = edge_attr.squeeze(-1) > 0.5
-        joint_mask = ~is_object_edge
-
+    def edge_model(self, source, target, radial, joint_indices=None, object_indices=None):
         # Initialize output tensor
         out = torch.zeros(
             source.shape[0], 
@@ -123,22 +117,13 @@ class TypeAwareE_GCL(nn.Module):
         )
 
         # Process joint-to-joint edges
-        if joint_mask.any():
-            inp_joint = torch.cat([
-                source[joint_mask], 
-                target[joint_mask], 
-                radial[joint_mask]
-            ], dim=1)
-            out[joint_mask] = self.edge_mlp_joint(inp_joint)
-
-        # Process joint-to-object edges
-        if is_object_edge.any():
-            inp_object = torch.cat([
-                source[is_object_edge],
-                target[is_object_edge],
-                radial[is_object_edge]
-            ], dim=1)
-            out[is_object_edge] = self.edge_mlp_object(inp_object)
+        inp = torch.cat([
+            source, 
+            target, 
+            radial
+        ], dim=1)
+        out[joint_indices] = self.edge_mlp_joint(inp[joint_indices])
+        out[object_indices] = self.edge_mlp_object(inp[object_indices])
 
         if self.attention:
             att_val = self.att_mlp(out)
@@ -154,8 +139,7 @@ class TypeAwareE_GCL(nn.Module):
         """
         
         row, col = edge_index
-        
-
+    
         trans = torch.zeros_like(coord_diff)
         trans[joint_indices] = coord_diff[joint_indices] * self.coord_mlp_joint(edge_feat[joint_indices])
         trans[object_indices] = coord_diff[object_indices] * self.coord_mlp_object(edge_feat[object_indices])
@@ -171,32 +155,22 @@ class TypeAwareE_GCL(nn.Module):
         coord = coord + agg.clamp(-10, 10)
         return coord
 
-    def node_model(self, x, edge_index, edge_attr, node_attr):
+    def node_model(self, x, edge_index, edge_feat, joint_indices=None, object_indices=None):
         """
         Type-aware node feature update.
         Uses different MLPs for joint and object nodes.
         Requires node_attr to distinguish node types.
         """
-        assert node_attr is not None, "TypeAwareE_GCL requires node_attr"
         
         row, col = edge_index
-        agg = unsorted_segment_sum(edge_attr, row, num_segments=x.size(0))
-
-        # Type-specific node updates
-        is_object_node = node_attr.squeeze(-1) > 0.5
-        joint_mask = ~is_object_node
+        agg = unsorted_segment_sum(edge_feat, row, num_segments=x.size(0))
 
         out = torch.zeros_like(x)
 
         # Process joint nodes
-        if joint_mask.any():
-            agg_joint = torch.cat([x[joint_mask], agg[joint_mask]], dim=1)
-            out[joint_mask] = self.node_mlp_joint(agg_joint)
-
-        # Process object nodes
-        if is_object_node.any():
-            agg_object = torch.cat([x[is_object_node], agg[is_object_node]], dim=1)
-            out[is_object_node] = self.node_mlp_object(agg_object)
+        agg = torch.cat([x, agg], dim=1)
+        out[joint_indices] = self.node_mlp_joint(agg[joint_indices])
+        out[object_indices] = self.node_mlp_object(agg[object_indices])
 
         if self.residual:
             out = x + out
@@ -214,11 +188,11 @@ class TypeAwareE_GCL(nn.Module):
 
         radial, coord_diff = self.coord2radial(edge_index, coord)
 
-        edge_feat = self.edge_model(h[row], h[col], radial, edge_attr)
+        edge_feat = self.edge_model(h[row], h[col], radial, joint_indices=joint_indices, object_indices=object_indices)
 
         coord = self.coord_model(coord, edge_index, coord_diff, edge_feat, joint_indices=joint_indices, object_indices=object_indices)
 
-        h, agg = self.node_model(h, edge_index, edge_feat, node_attr)
+        h, agg = self.node_model(h, edge_index, edge_feat, joint_indices=joint_indices, object_indices=object_indices)
 
         return h, coord, edge_attr
 

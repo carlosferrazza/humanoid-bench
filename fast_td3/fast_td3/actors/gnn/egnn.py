@@ -219,7 +219,6 @@ class EGNN(nn.Module):
         self.has_mixed_node_types = object_node_nf is not None
 
         if self.has_mixed_node_types:
-            # Separate embedding layers for different node types
             self.joint_embedding_in = nn.Sequential(
                 nn.Linear(in_node_nf, self.hidden_nf), act_fn
             )
@@ -256,22 +255,18 @@ class EGNN(nn.Module):
                 for _ in range(n_layers)
             ]
         )
-        # Ensure all parameters and submodules are on the requested device
         self.to(self.device)
 
-        # no need to learn graph builder
         self.graph_builder = GraphBuilder(env_name, batch_size, device, robot)
         self.robot = robot
         self.env_name = env_name
 
-        # Move caching from GraphBuilder to EGNN
         self.edge_index, self.edge_attr, self.node_attr = self.generate_index(
             batch_size, device
         )
         self._edge_cache = {}
         self.num_edges = self.graph_builder.robot.joint_connections.__len__()
 
-        # Pre-compute edge indices for common batch sizes to avoid repeated computation
         common_batch_sizes = [1, 4, 16, 128, 8192]
         self._precomputed_edges = {}
         for bs in common_batch_sizes:
@@ -416,7 +411,6 @@ class EGNN(nn.Module):
             h.index_copy_(0, object_indices, h_object_embedded)
         else:
             h, x = self.graph_builder.generate_input(obs, xpos)
-
             h = self.embedding_in(h)
 
         for layer in self.layers:
@@ -425,10 +419,18 @@ class EGNN(nn.Module):
                 h=h, edge_index=edges, coord=x, edge_attr=edge_attr, node_attr=node_attr
             )
 
-        h = self.embedding_out(h)
-        h = h.view(current_batch_size, h.shape[0] // current_batch_size)
-
-        return h[:, :19]
+        if self.has_mixed_node_types:
+            joint_indices, _ = self._get_mask_indices(current_batch_size)
+            
+            h_joint_out = self.embedding_out(h[joint_indices])
+            h_joint_out = h_joint_out.view(current_batch_size, h.shape[0] // current_batch_size)
+            
+            # Return first 19 joint features for action prediction
+            return h_joint_out
+        else:
+            h = self.embedding_out(h)
+            h = h.view(current_batch_size, h.shape[0] // current_batch_size)
+            return h
 
 
 @torch.compile(dynamic=True)

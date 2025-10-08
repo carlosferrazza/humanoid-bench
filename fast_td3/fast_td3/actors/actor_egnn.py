@@ -20,13 +20,11 @@ class ActorEGNN(nn.Module):
         robot: str = "h1",
         std_min: float = 0.05,
         std_max: float = 0.8,
-        n_node_feat: int = 2,
         n_edge_feat: int = 0,
         attention: bool = False,
         coords_agg: str = "mean",
         normalize: bool = False,
         tanh: bool = False,
-        object_node_nf: int | None = None,
     ):
         super().__init__()
         self.n_act = n_act
@@ -44,7 +42,6 @@ class ActorEGNN(nn.Module):
 
         # EGNN for message passing
         self.egnn = EGNN(
-            in_node_nf=n_node_feat,
             hidden_nf=hidden_dim,
             out_node_nf=1,
             in_edge_nf=n_edge_feat,
@@ -58,7 +55,6 @@ class ActorEGNN(nn.Module):
             normalize=normalize,
             tanh=tanh,
             env_name=env_name,
-            object_node_nf=object_node_nf
         )
 
         # Initialize noise parameters

@@ -1,5 +1,6 @@
 from torch import nn
 import torch
+from torch_scatter import scatter_sum, scatter_mean
 
 from fast_td3.robots.graph_builder import GraphBuilder
 
@@ -138,13 +139,13 @@ class E_GCL(nn.Module):
         coord = coord + agg.clamp(-10, 10)
         return coord
 
-    def node_model(self, x, edge_index, edge_attr, node_attr):
+    def node_model(self, x, edge_index, edge_feat, node_attr):
         """
         Step 4: Feature update h_i^{l+1} = φ_h(h_i, Σ_{j∈N(i)} m_{ij}).
         Aggregates edge messages and updates node features.
         """
         row, col = edge_index
-        agg = unsorted_segment_sum(edge_attr, row, num_segments=x.size(0))
+        agg = unsorted_segment_sum(edge_feat, row, num_segments=x.size(0))
         if node_attr is not None:
             agg = torch.cat([x, agg, node_attr], dim=1)
         else:
@@ -171,7 +172,6 @@ class E_GCL(nn.Module):
 class EGNN(nn.Module):
     def __init__(
         self,
-        in_node_nf,
         hidden_nf,
         out_node_nf,
         in_edge_nf,
@@ -186,11 +186,8 @@ class EGNN(nn.Module):
         normalize=False,
         tanh=False,
         coords_agg="mean",
-        object_node_nf=None,
     ):
         """
-        :param in_node_nf: Number of features for 'h' at the input (backward compatibility)
-        :param object_node_nf: Number of features for object nodes (if different from in_node_nf)
         :param hidden_nf: Number of hidden features
         :param out_node_nf: Number of features for 'h' at the output
         :param in_edge_nf: Number of features for the edge features
@@ -215,28 +212,15 @@ class EGNN(nn.Module):
         self.device = device
         self.n_layers = n_layers
         self.out_node_nf = out_node_nf
-
-        self.has_mixed_node_types = object_node_nf is not None
-
-        if self.has_mixed_node_types:
-            self.joint_embedding_in = nn.Sequential(
-                nn.Linear(in_node_nf, self.hidden_nf), act_fn
-            )
-            self.object_embedding_in = nn.Sequential(
-                nn.Linear(object_node_nf, self.hidden_nf), act_fn
-            )
-        else:
-            # Single embedding layer for backward compatibility
-            self.embedding_in = nn.Sequential(
-                nn.Linear(in_node_nf, self.hidden_nf), act_fn
-            )
-
-        self.embedding_out = nn.Sequential(
-            nn.Linear(self.hidden_nf, out_node_nf),
-            nn.Tanh(),
-        )
         self.batch_size = batch_size
-        # Use ModuleList for fast iteration and to avoid dict lookups
+        self.has_mixed_node_types = env_name in env_with_object
+        self.robot = robot
+        self.env_name = env_name
+        self.graph_builder = GraphBuilder(env_name, batch_size, device, robot)
+        self.num_joints = len(self.graph_builder.robot.JOINT)
+        self.num_edges = len(self.graph_builder.robot.joint_connections)
+
+        # EGNN layers for local joint-to-joint processing
         self.layers = nn.ModuleList(
             [
                 E_GCL(
@@ -255,199 +239,128 @@ class EGNN(nn.Module):
                 for _ in range(n_layers)
             ]
         )
+    
+
+        if self.has_mixed_node_types:
+            self.joint_embedding_in = nn.Sequential(
+                nn.LazyLinear(self.hidden_nf), act_fn
+            )
+            # Object MLP for local processing within object cluster
+            self.object_mlp = nn.Sequential(
+                nn.LazyLinear(self.hidden_nf),
+                act_fn
+            )
+
+            self.global_aggregation = nn.Sequential(
+                nn.Linear(self.hidden_nf * 2, self.hidden_nf * 4),  # concat [joint_feat, object_feat]
+                act_fn,
+                nn.Linear(self.hidden_nf * 4, self.hidden_nf * 4),
+                act_fn,
+                nn.Linear(self.hidden_nf * 4, self.out_node_nf),
+            )
+
+            self.skip_proj = nn.Linear(self.hidden_nf * 2, self.out_node_nf)
+        else:
+            # Single embedding layer for backward compatibility
+            self.embedding_in = nn.Sequential(
+                nn.LazyLinear(self.hidden_nf), act_fn
+            )
+            self.embedding_out = nn.Sequential(
+                nn.Linear(self.hidden_nf, out_node_nf),
+                nn.Tanh(),
+            )
+    
         self.to(self.device)
 
-        self.graph_builder = GraphBuilder(env_name, batch_size, device, robot)
-        self.robot = robot
-        self.env_name = env_name
 
-        self.edge_index, self.edge_attr, self.node_attr = self.generate_index(
-            batch_size, device
-        )
+        # Initialize edge cache - will be populated dynamically as new batch sizes are encountered
         self._edge_cache = {}
-        self.num_edges = self.graph_builder.robot.joint_connections.__len__()
-
-        common_batch_sizes = [1, 4, 16, 128, 8192]
-        self._precomputed_edges = {}
-        for bs in common_batch_sizes:
-            if bs <= batch_size:
-                try:
-                    self._precomputed_edges[bs] = self.generate_index(bs, device)
-                except RuntimeError:
-                    # Skip if out of memory for very large batch sizes
-                    break
-
-        # Pre-compute mask indices for mixed node types (huge speedup)
-        if self.has_mixed_node_types:
-            self._precompute_mask_indices()
 
     def generate_index(self, batch_size: int, device="cuda"):
-        """Generate edge indices, edge attributes, and node attributes for given batch size."""
-        edge_attr = []
-        node_attr = []
-
-        if self.env_name in env_with_object:
-            object_node_id = self.graph_builder.robot.OBJECT.free_object
-            src, dst = zip(*self.graph_builder.robot.joint_connections_with_object)
-            node_attr = [0] * (len(self.graph_builder.robot.JOINT)) + [
-                1
-            ]  # last node is object node
-
-            # Create edge_attr: 1 if edge involves object_node_id, else 0
-            for s, d in zip(src, dst):
-                if s == object_node_id or d == object_node_id:
-                    edge_attr.append(1)
-                else:
-                    edge_attr.append(0)
-        else:
-            src, dst = zip(*self.graph_builder.robot.joint_connections)
-            node_attr = [0] * (len(self.graph_builder.robot.JOINT))  # All joint nodes
-            edge_attr = [0] * len(src)  # All edges are joint-to-joint
-
-        # Unpack edge list into two tuples
+        """
+        Generate joint-to-joint edge indices for given batch size.
+        Since we now process objects separately with MLP, we only need joint edges for EGNN.
+        """
+        # Always use joint-to-joint connections only
+        src, dst = zip(*self.graph_builder.robot.joint_connections)
+        
+        # Convert to tensors
         src = torch.tensor(src, dtype=torch.long, device=device)
         dst = torch.tensor(dst, dtype=torch.long, device=device)
-        edge_attr = torch.tensor(edge_attr, dtype=torch.float, device=device)
-        node_attr = torch.tensor(node_attr, dtype=torch.float, device=device)
+        edge_attr = torch.zeros(len(src), dtype=torch.float, device=device)
+        num_nodes_per_batch = len(self.graph_builder.robot.JOINT)
 
-        # Create batch offsets and expand edges in one operation
-        offsets = torch.arange(batch_size, device=device) * (
-            len(self.graph_builder.robot.JOINT)
-            + (1 if self.env_name in env_with_object else 0)
-        )
-        src_batch = (src.unsqueeze(0) + offsets.unsqueeze(1)).flatten().to(device)
-        dst_batch = (dst.unsqueeze(0) + offsets.unsqueeze(1)).flatten().to(device)
-        edge_attr_batch = edge_attr.repeat(batch_size).to(device).unsqueeze(-1)
-        node_attr_batch = node_attr.repeat(batch_size).to(device).unsqueeze(-1)
+        # Create batch offsets and expand edges
+        offsets = torch.arange(batch_size, device=device) * num_nodes_per_batch
+        src_batch = (src.unsqueeze(0) + offsets.unsqueeze(1)).flatten()
+        dst_batch = (dst.unsqueeze(0) + offsets.unsqueeze(1)).flatten()
+        edge_attr_batch = edge_attr.repeat(batch_size).unsqueeze(-1)
 
-        return torch.stack([src_batch, dst_batch]), edge_attr_batch, node_attr_batch
+        return torch.stack([src_batch, dst_batch]), edge_attr_batch, None
 
     def _get_cached_edges(self, current_batch_size: int):
-        """Optimized method to get edge indices with pre-computed cache lookup."""
-        # Check pre-computed edges first (fastest)
-        if current_batch_size in self._precomputed_edges:
-            return self._precomputed_edges[current_batch_size]
-
-        # Check runtime cache
+        """
+        Optimized method to get edge indices with dynamic caching.
+        Automatically caches new batch sizes as they're encountered.
+        """
+        # Check if already cached
         if current_batch_size in self._edge_cache:
             return self._edge_cache[current_batch_size]
 
-        # Generate and cache
+        # Generate, cache, and return
         edge_data = self.generate_index(current_batch_size, self.device)
         self._edge_cache[current_batch_size] = edge_data
         return edge_data
 
-    def _precompute_mask_indices(self):
-        """Pre-compute joint and object node indices for efficient gathering."""
-        num_joints = len(self.graph_builder.robot.JOINT)
-        has_object = 1 if self.env_name in env_with_object else 0
-        num_nodes_per_batch = num_joints + has_object
-        
-        # Create a template for node attributes per batch
-        node_attr_template = torch.tensor(
-            [0] * num_joints + [1] * has_object,
-            dtype=torch.float,
-            device=self.device
-        )
-        
-        # Store indices where joints and objects are located within each batch
-        self.joint_indices_per_batch = torch.where(node_attr_template == 0)[0]
-        self.object_indices_per_batch = torch.where(node_attr_template == 1)[0]
-        self.num_nodes_per_batch = num_nodes_per_batch
-        self._mask_index_cache = {}
-
-    def _get_mask_indices(self, batch_size: int):
-        """Get pre-computed mask indices for given batch size."""
-        if batch_size in self._mask_index_cache:
-            return self._mask_index_cache[batch_size]
-        
-        # Generate indices for all batches
-        batch_offsets = torch.arange(
-            batch_size, device=self.device
-        ) * self.num_nodes_per_batch
-        
-        # Expand joint and object indices for all batches
-        joint_indices = (
-            self.joint_indices_per_batch.unsqueeze(0) + batch_offsets.unsqueeze(1)
-        ).flatten()
-        
-        object_indices = (
-            self.object_indices_per_batch.unsqueeze(0) + batch_offsets.unsqueeze(1)
-        ).flatten()
-        
-        self._mask_index_cache[batch_size] = (joint_indices, object_indices)
-        return joint_indices, object_indices
-
     def forward(self, obs: torch.Tensor, xpos: torch.Tensor) -> torch.Tensor:
         current_batch_size = obs.shape[0]
-
-        # Get cached edge data for current batch size
-        edges, edge_attr, node_attr = self._get_cached_edges(current_batch_size)
-        if not self.has_mixed_node_types:
-            edge_attr = None
-            node_attr = None
+        edges, _, _ = self._get_cached_edges(current_batch_size)
 
         if self.has_mixed_node_types:
-            h_joint, h_object, x = self.graph_builder.generate_input_for_mixed_type(
-                obs, xpos
-            )
+            # === STEP 1: Local Processing within Clusters ===
 
-            h_joint_embedded = self.joint_embedding_in(h_joint)
-            h_object_embedded = self.object_embedding_in(h_object)
+            # 1a. Extract joint and object features
+            h_joint, h_object, x_joint, _ = self.graph_builder.generate_input_for_mixed_type(obs, xpos)
 
-            # Get pre-computed indices for fast gathering
-            joint_indices, object_indices = self._get_mask_indices(current_batch_size)
+            # 1b. Process objects locally with MLP (object cluster)
+            h_object_processed = self.object_mlp(h_object)  # [batch, hidden_nf]
 
-            # Allocate h with correct shape - use empty instead of zeros (faster)
-            h = torch.empty(
-                current_batch_size * self.num_nodes_per_batch,
-                self.hidden_nf,
-                device=self.device,
-                dtype=h_joint_embedded.dtype,
-            )
+            # 1c. Process joints locally with EGNN (actuator cluster)
+            h_joint_embedded = self.joint_embedding_in(h_joint)  # [batch*num_joints, hidden_nf]
+            h_joints = h_joint_embedded
+            for layer in self.layers:
+                h_joints, x_joint, _ = layer(h=h_joints, edge_index=edges, coord=x_joint)
 
-            # Use index_copy_ for faster assignment than boolean indexing
-            h.index_copy_(0, joint_indices, h_joint_embedded)
-            h.index_copy_(0, object_indices, h_object_embedded)
+            # === STEP 2: Global Aggregation via Directed Fully-Connected Inter-Edges ===
+            # (object -> all joints)
+            h_joints_batched = h_joints.view(current_batch_size, self.num_joints, self.hidden_nf)
+            h_object_broadcasted = h_object_processed.unsqueeze(1).expand(-1, self.num_joints, -1)
+            h_joint_object_concat = torch.cat([h_joints_batched, h_object_broadcasted], dim=-1)
+
+            # MLP computes context-dependent delta for each joint
+            h_delta = self.global_aggregation(h_joint_object_concat)  # [batch, num_joints, 1]
+
+            # === Residual connection ===
+            h_skip = self.skip_proj(h_joint_object_concat)  # [batch, num_joints, 1]
+            h_global = h_skip + h_delta
+
+            # Final bounded joint actions
+            actions = torch.tanh(h_global)
+            return actions.view(current_batch_size, self.num_joints)
+
         else:
             h, x = self.graph_builder.generate_input(obs, xpos)
             h = self.embedding_in(h)
-
-        for layer in self.layers:
-            # print(f"Layer {i} x min: {x.min()}, max: {x.max()}, mean: {x.mean()}")
-            h, x, edge_attr = layer(
-                h=h, edge_index=edges, coord=x, edge_attr=edge_attr, node_attr=node_attr
-            )
-
-        if self.has_mixed_node_types:
-            joint_indices, _ = self._get_mask_indices(current_batch_size)
-            
-            h_joint_out = self.embedding_out(h[joint_indices])
-            h_joint_out = h_joint_out.view(current_batch_size, h.shape[0] // current_batch_size)
-            
-            # Return first 19 joint features for action prediction
-            return h_joint_out
-        else:
+            for layer in self.layers:
+                h, x, _ = layer(h=h, edge_index=edges, coord=x)
             h = self.embedding_out(h)
-            h = h.view(current_batch_size, h.shape[0] // current_batch_size)
-            return h
+            h = h.view(current_batch_size, self.num_joints)
+            return torch.tanh(h)
 
 
-@torch.compile(dynamic=True)
 def unsorted_segment_sum(data, segment_ids, num_segments):
-    result_shape = (num_segments, data.size(1))
-    result = data.new_full(result_shape, 0)  # Init empty result tensor.
-    segment_ids = segment_ids.unsqueeze(-1).expand(-1, data.size(1))
-    result.scatter_add_(0, segment_ids, data)
-    return result
+    return scatter_sum(data, segment_ids, dim=0, dim_size=num_segments)
 
 
-@torch.compile(dynamic=True)
 def unsorted_segment_mean(data, segment_ids, num_segments):
-    result_shape = (num_segments, data.size(1))
-    segment_ids = segment_ids.unsqueeze(-1).expand(-1, data.size(1))
-    result = data.new_full(result_shape, 0)  # Init empty result tensor.
-    count = data.new_full(result_shape, 0)
-    result.scatter_add_(0, segment_ids, data)
-    count.scatter_add_(0, segment_ids, torch.ones_like(data))
-    return result / count.clamp(min=1)
+    return scatter_mean(data, segment_ids, dim=0, dim_size=num_segments)

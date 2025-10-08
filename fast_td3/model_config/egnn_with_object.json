@@ -2,7 +2,7 @@
     "hidden_dim": 64,
     "n_layers": 4,
     "act_fn": "relu",
-    "n_edge_feat": 1,
+    "n_edge_feat": 0,
     "coords_agg": "mean",
-    "object_node_nf": 12
+    "object_node_nf": 13
 }

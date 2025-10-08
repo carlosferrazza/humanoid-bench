@@ -7,6 +7,7 @@ Uses separate MLPs for different node/edge types for better representation learn
 from torch import nn
 import torch
 from fast_td3.robots.graph_builder import GraphBuilder
+from torch_scatter import scatter_sum, scatter_mean
 
 
 env_with_object = [
@@ -267,10 +268,6 @@ class TypeAwareEGNN(nn.Module):
             nn.Linear(self.hidden_nf, out_node_nf),
             nn.Tanh(),
         )
-        self.object_embedding_out = nn.Sequential(
-            nn.Linear(self.hidden_nf, out_node_nf),
-            nn.Tanh(),
-        )
 
         self.batch_size = batch_size
 
@@ -439,39 +436,16 @@ class TypeAwareEGNN(nn.Module):
         joint_indices, object_indices = self._get_mask_indices(current_batch_size)
 
         h_joint_out = self.joint_embedding_out(h[joint_indices])
-        h_object_out = self.object_embedding_out(h[object_indices])
 
         num_joints = len(self.joint_indices_per_batch)
-        num_objects = len(self.object_indices_per_batch)
 
-        h_joint_out = h_joint_out.view(current_batch_size, num_joints, -1)
-        h_object_out = h_object_out.view(current_batch_size, num_objects, -1)
-
-        # Concatenate joint and object features
-        h_out = torch.cat([
-            h_joint_out.flatten(1),
-            h_object_out.flatten(1)
-        ], dim=1)
-
-        # Return first 19 features (actions for 19 joints)
-        return h_out[:, :19]
+        h_joint_out = h_joint_out.view(current_batch_size, num_joints)
+        return h_joint_out
 
 
-@torch.compile(dynamic=True)
 def unsorted_segment_sum(data, segment_ids, num_segments):
-    result_shape = (num_segments, data.size(1))
-    result = data.new_full(result_shape, 0)
-    segment_ids = segment_ids.unsqueeze(-1).expand(-1, data.size(1))
-    result.scatter_add_(0, segment_ids, data)
-    return result
+    return scatter_sum(data, segment_ids, dim=0, dim_size=num_segments)
 
 
-@torch.compile(dynamic=True)
 def unsorted_segment_mean(data, segment_ids, num_segments):
-    result_shape = (num_segments, data.size(1))
-    segment_ids = segment_ids.unsqueeze(-1).expand(-1, data.size(1))
-    result = data.new_full(result_shape, 0)
-    count = data.new_full(result_shape, 0)
-    result.scatter_add_(0, segment_ids, data)
-    count.scatter_add_(0, segment_ids, torch.ones_like(data))
-    return result / count.clamp(min=1)
+    return scatter_mean(data, segment_ids, dim=0, dim_size=num_segments)

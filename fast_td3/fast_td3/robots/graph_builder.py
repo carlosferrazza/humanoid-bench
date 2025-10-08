@@ -82,10 +82,33 @@ class GraphBuilder:
         return h, x
     
     # h = qpos concat qvel
-    # @torch.compile
+    @torch.compile(dynamic=True)
     def generate_input_for_mixed_type(self, obs: torch.tensor, xpos: torch.tensor):
         if self.env_name in env_with_object:
-            current_batch_size = obs.shape[0]
+            assert xpos.shape[1] == 21, f"xpos shape: {xpos.shape}"
+            x_joint = (xpos[:, 1:20] - xpos[:, [0]]).reshape(-1, 3)
+            x_object = (xpos[:, 20:] - xpos[:, [0]]).reshape(-1, 3)
+
+            # square distance from each joint to object
+            distant_joint_to_object = (xpos[:, 1:20] - xpos[:, [20]]).reshape(-1, 3).pow(2).sum(dim=-1, keepdim=True)
+
+            assert obs.shape[1] == 64, f"obs shape: {obs.shape}"
+            assert xpos.shape[1] == 21, f"xpos shape: {xpos.shape}"
+            h_node = torch.cat([
+                obs[:, 7:26].reshape(-1, 1),
+                obs[:, 39:58].reshape(-1, 1),
+                distant_joint_to_object
+            ], dim=1)
+            
+            h_object = torch.cat([
+                obs[:, 26:33],
+                obs[:, 58:64]
+            ], dim=1)
+
+            return h_node, h_object, x_joint, x_object
+
+    def generate_input_for_env_with_object(self, obs: torch.tensor, xpos: torch.tensor):
+        if self.env_name in env_with_object:
             #assert obs.shape[1] == 63, f"obs shape: {obs.shape}"
             #assert xpos.shape[1] == 21, f"xpos shape: {xpos.shape}"
             h_node = torch.cat([
@@ -93,15 +116,9 @@ class GraphBuilder:
                 obs[:, 39:58].reshape(-1, 1),
             ], dim=1)
             
-            h_object = torch.cat([
-                obs[:, 26:33].reshape(current_batch_size, -1),
-                obs[:, 58:63].reshape(current_batch_size, -1)
-            ], dim=1)
-
             x = (xpos[:, 1:] - xpos[:, [0]]).reshape(-1, 3)
 
-            return h_node, h_object, x
-        
+            return h_node, x        
 
     def visualize_graph(self, with_object: bool | None = None, save_path: str = "robot_graph.png"):
         """Visualize the current graph.

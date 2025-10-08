@@ -23,6 +23,7 @@ from torch.amp import autocast, GradScaler
 from tensordict import TensorDict, from_module
 
 torch.autograd.set_detect_anomaly(True)
+torch.backends.cudnn.benchmark = False
 torch.set_float32_matmul_precision("high")
 from fast_td3.fast_td3_utils import (
     EmpiricalNormalization,
@@ -30,15 +31,8 @@ from fast_td3.fast_td3_utils import (
     save_params,
 )
 from fast_td3 import Critic
-from fast_td3.actors import (
-    ActorEGNN,
-    Actor,
-    ActorMPNN,
-    ActorHEPI,
-    ActorAEGNN,
-    ActorPONITA,
-    ActorHEGNN
-)
+
+from fast_td3.train_utils import print_gradient_stats, create_actor
 from fast_td3.hyperparams import HumanoidBenchArgs
 import argparse
 from fast_td3.environments.humanoid_bench_env import HumanoidBenchEnv
@@ -47,231 +41,6 @@ import base64
 import imageio
 import tempfile
 import os
-
-
-def print_gradient_stats(model, model_name, step, detailed=False):
-    """
-    Print gradient statistics for monitoring training.
-    
-    Args:
-        model: The neural network model
-        model_name: Name of the model (e.g., "Actor", "Critic")
-        step: Current training step
-        detailed: If True, print per-parameter stats; if False, print layer group summary
-    """
-    print(f"\n{'='*80}")
-    print(f"{model_name} Gradients at Step {step}")
-    print(f"{'='*80}")
-    
-    # Count parameters with/without gradients
-    total_params = sum(1 for _ in model.parameters())
-    params_with_grad = sum(1 for p in model.parameters() if p.grad is not None)
-    params_without_grad = total_params - params_with_grad
-    
-    if params_without_grad > 0:
-        print(f"⚠️  WARNING: {params_without_grad}/{total_params} parameters have no gradients!")
-    
-    if detailed:
-        # Print detailed per-parameter gradients
-        for name, param in model.named_parameters():
-            if param.grad is not None:
-                grad_norm = param.grad.norm().item()
-                grad_mean = param.grad.mean().item()
-                grad_std = param.grad.std().item()
-                grad_max = param.grad.abs().max().item()
-                grad_min = param.grad.abs().min().item()
-                print(f"  {name:60s}")
-                print(f"    norm: {grad_norm:10.6f} | mean: {grad_mean:10.6f} | std: {grad_std:10.6f}")
-                print(f"    max:  {grad_max:10.6f} | min:  {grad_min:10.6f}")
-    else:
-        # Group gradients by layer type for EGNN models
-        layer_groups = {}
-        zero_grad_params = []
-        
-        for name, param in model.named_parameters():
-            if param.grad is None:
-                continue
-            
-            # Check for zero/near-zero gradients
-            if param.grad.abs().max().item() < 1e-8:
-                zero_grad_params.append(name)
-                
-            # Categorize parameters with improved logic
-            if "embedding_in" in name or "embedding_out" in name:
-                group = "Embeddings"
-            elif "joint_embedding" in name or "object_embedding" in name:
-                group = "Input Embeddings"
-            elif "gnn.layers" in name or "model.layers" in name:
-                # Extract layer number for EGNN layers
-                parts = name.split(".")
-                layer_idx = next((i for i, p in enumerate(parts) if p == "layers"), None)
-                layer_num = parts[layer_idx + 1] if layer_idx and layer_idx + 1 < len(parts) else "?"
-                
-                if "edge_mlp" in name:
-                    group = f"L{layer_num}_EdgeMLP"
-                elif "coord_mlp" in name:
-                    group = f"L{layer_num}_CoordMLP"
-                elif "node_mlp" in name:
-                    group = f"L{layer_num}_NodeMLP"
-                elif "att_mlp" in name:
-                    group = f"L{layer_num}_AttentionMLP"
-                else:
-                    group = f"L{layer_num}_Other"
-            elif "qf" in name:  # For critic Q-functions
-                if "qf1" in name:
-                    group = "Critic_QF1"
-                elif "qf2" in name:
-                    group = "Critic_QF2"
-                else:
-                    group = "Critic_Q"
-            elif "fc" in name or ("linear" in name and "qf" not in name):
-                group = "Linear Layers"
-            else:
-                group = f"Other ({name.split('.')[0]})"
-            
-            if group not in layer_groups:
-                layer_groups[group] = []
-            
-            layer_groups[group].append(param.grad)
-        
-        # Print summary statistics for each group
-        print(f"{'Layer Group':<30s} | {'Norm':>10s} | {'Mean':>10s} | {'Std':>10s} | {'Max':>10s}")
-        print("-" * 80)
-        
-        vanishing_groups = []
-        for group in sorted(layer_groups.keys()):
-            grads = layer_groups[group]
-            # Concatenate all gradients in the group
-            all_grads = torch.cat([g.flatten() for g in grads])
-            
-            norm = all_grads.norm().item()
-            mean = all_grads.mean().item()
-            std = all_grads.std().item()
-            max_val = all_grads.abs().max().item()
-            
-            # Flag vanishing gradients
-            if max_val < 1e-4:
-                vanishing_groups.append(group)
-                print(f"{group:<30s} | {norm:10.4f} | {mean:10.6f} | {std:10.6f} | {max_val:10.6f} ⚠️")
-            else:
-                print(f"{group:<30s} | {norm:10.4f} | {mean:10.6f} | {std:10.6f} | {max_val:10.6f}")
-        
-        if vanishing_groups:
-            print("-" * 80)
-            print(f"⚠️  VANISHING GRADIENTS detected in: {', '.join(vanishing_groups)}")
-        
-        if zero_grad_params:
-            print("-" * 80)
-            print(f"🔴 ZERO GRADIENTS in {len(zero_grad_params)} parameters: {zero_grad_params[:3]}...")
-    
-    print(f"{'='*80}\n")
-
-
-def create_actor(
-    actor_type,
-    n_obs,
-    n_act,
-    num_envs,
-    batch_size,
-    device,
-    init_scale,
-    env_name,
-    model_kwargs,
-    actor_hidden_dim=None,
-):
-    """
-    Helper function to create an actor based on the specified type.
-
-    Args:
-        actor_type (str): Type of actor ("egnn", "mlp", "mpnn", "hepi")
-        n_obs (int): Number of observations
-        n_act (int): Number of actions
-        num_envs (int): Number of environments
-        batch_size (int): Batch size
-        device (torch.device): Device to place the actor on
-        init_scale (float): Initialization scale
-        model_kwargs (dict): Additional model parameters
-        actor_hidden_dim (int, optional): Hidden dimension for MLP actor
-
-    Returns:
-        Actor: The created actor instance
-
-    Raises:
-        ValueError: If actor_type is not supported
-    """
-    if actor_type == "egnn":
-        return ActorEGNN(
-            n_obs=n_obs,
-            n_act=n_act,
-            num_envs=num_envs,
-            batch_size=batch_size,
-            device=device,
-            init_scale=init_scale,
-            env_name=env_name,
-            **model_kwargs,
-        )
-    elif actor_type == "mlp":
-        return Actor(
-            n_obs=n_obs,
-            n_act=n_act,
-            num_envs=num_envs,
-            device=device,
-            init_scale=init_scale,
-            hidden_dim=actor_hidden_dim,
-        )
-    elif actor_type == "mpnn":
-        return ActorMPNN(
-            n_obs=n_obs,
-            n_act=n_act,
-            num_envs=num_envs,
-            batch_size=batch_size,
-            device=device,
-            **model_kwargs,
-        )
-    elif actor_type == "hepi":
-        return ActorHEPI(
-            n_obs=n_obs,
-            n_act=n_act,
-            num_envs=num_envs,
-            batch_size=batch_size,
-            device=device,
-            **model_kwargs,
-        )
-    elif actor_type == "aegnn":
-        return ActorAEGNN(
-            n_obs=n_obs,
-            n_act=n_act,
-            num_envs=num_envs,
-            batch_size=batch_size,
-            device=device,
-            init_scale=init_scale,
-            **model_kwargs,
-        )
-    elif actor_type == "ponita":
-        return ActorPONITA(
-            n_obs=n_obs,
-            n_act=n_act,
-            num_envs=num_envs,
-            batch_size=batch_size,
-            device=device,
-            robot="h1",
-            **model_kwargs,
-        )
-    elif actor_type == "hegnn":
-        return ActorHEGNN(
-            n_obs=n_obs,
-            n_act=n_act,
-            num_envs=num_envs,
-            batch_size=batch_size,
-            device=device,
-            init_scale=init_scale,
-            env_name=env_name,
-            **model_kwargs,
-        )
-    else:
-        raise ValueError(
-            f"Unsupported actor type: {actor_type}. Supported types are: egnn, mlp, mpnn, hepi"
-        )
 
 
 def main():
@@ -346,17 +115,11 @@ def main():
     print(f"Training with args: {terminal_args}")
 
     use_wandb = terminal_args["wandb"]
-    uid = uuid.uuid4().hex[:6]  # 6-char unique ID
-
-    run_name = (
-        f"{terminal_args['actor']}_"
-        f"{args.env_name}_"
-        f"{args.num_envs}envs_"
-        f"{args.total_timesteps}steps_"
-        f"{uid}"
-    )
 
     if use_wandb:
+        uid = uuid.uuid4().hex[:6]  # 6-char unique ID
+        run_name = f"{terminal_args['actor']}_{args.env_name}_{args.num_envs}envs_{args.total_timesteps}steps_{uid}"
+        
         wandb.init(
             entity="thuaduc24042001-technical-university-of-munich",
             project="FastTD3 - new",
@@ -368,7 +131,12 @@ def main():
                 _disable_meta=True,  # disables system metadata collection
             ),
         )
-        wandb.save("fast_td3/robots/h1.py")
+        
+        wandb.save("fast_td3/actors/gnn/egnn.py")
+        wandb.save("fast_td3/robots/H1.py")
+        wandb.save("fast_td3/robots/graph_builder.py")
+
+
 
     amp_enabled = args.amp and args.cuda and torch.cuda.is_available()
     amp_device_type = (
@@ -467,18 +235,9 @@ def main():
         actor_hidden_dim=args.actor_hidden_dim,
     )
 
-    # For PONITA actors, we need to initialize LazyLinear layers before copying parameters
-    if terminal_args["actor"] == "ponita":
-        # Get initial observations to initialize the LazyLinear layers
-        if envs.asymmetric_obs:
-            init_obs, init_critic_obs = envs.reset_with_critic_obs()
-            init_critic_obs = torch.as_tensor(
-                init_critic_obs, device=device, dtype=torch.float
-            )
-        else:
-            init_obs, init_xpos = envs.reset()
-
-        # Initialize the main actor's LazyLinear layers with a dummy forward pass
+    # For actors with LazyLinear layers (PONITA, EGNN with mixed types), we need to initialize them before copying parameters
+    if terminal_args["actor"] in ["ponita", "egnn"]:
+        init_obs, init_xpos = envs.reset()
         with torch.no_grad():
             _ = actor(init_obs.to(device), init_xpos.to(device))
 
@@ -782,8 +541,8 @@ def main():
         scaler.unscale_(q_optimizer)
 
         # Monitor critic gradients before clipping (every 10 steps)
-        if global_step % 10 == 0:
-            print_gradient_stats(qnet, "Critic", global_step, detailed=False)
+        # if global_step % 10 == 0:
+        #     print_gradient_stats(qnet, "Critic", global_step, detailed=False)
         
         # Gradient clipping to prevent exploding gradients
         critic_grad_norm = torch.nn.utils.clip_grad_norm_(
@@ -848,8 +607,8 @@ def main():
         scaler.unscale_(actor_optimizer)
 
         # Monitor actor gradients before clipping (every 10 steps)
-        if global_step % 10 == 0:
-            print_gradient_stats(actor, "Actor", global_step, detailed=False)
+        # if global_step % 10 == 0:
+        #     print_gradient_stats(actor, "Actor", global_step, detailed=False)
         
         # Gradient clipping to prevent exploding gradients
         actor_grad_norm = torch.nn.utils.clip_grad_norm_(

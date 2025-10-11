@@ -1,4 +1,6 @@
 import multiprocessing as mp
+import os
+import platform
 import warnings
 from collections.abc import Sequence
 from typing import Any, Callable, Optional, Union
@@ -16,6 +18,11 @@ from stable_baselines3.common.vec_env.base_vec_env import (
 )
 from stable_baselines3.common.vec_env.patch_gym import _patch_env
 from fast_td3.environments.physics_data import PhysicsData
+
+
+# Set environment variable to disable fork safety on macOS
+if platform.system() == "Darwin":
+    os.environ["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"
 
 
 def _worker(  # noqa: C901
@@ -107,11 +114,16 @@ class SubprocVecEnv(VecEnv):
         n_envs = len(env_fns)
 
         if start_method is None:
-            # Fork is not a thread safe method (see issue #217)
-            # but is more user friendly (does not require to wrap the code in
-            # a `if __name__ == "__main__":`)
-            forkserver_available = "forkserver" in mp.get_all_start_methods()
-            start_method = "forkserver" if forkserver_available else "spawn"
+            # On macOS, we must use 'spawn' to avoid objc fork issues
+            if platform.system() == "Darwin":
+                start_method = "spawn"
+            else:
+                # Fork is not a thread safe method (see issue #217)
+                # but is more user friendly (does not require to wrap the code in
+                # a `if __name__ == "__main__":`)
+                forkserver_available = "forkserver" in mp.get_all_start_methods()
+                start_method = "forkserver" if forkserver_available else "spawn"
+        
         ctx = mp.get_context(start_method)
 
         self.remotes, self.work_remotes = zip(*[ctx.Pipe() for _ in range(n_envs)])
@@ -124,8 +136,24 @@ class SubprocVecEnv(VecEnv):
             self.processes.append(process)
             work_remote.close()
 
-        self.remotes[0].send(("get_spaces", None))
-        observation_space, action_space = self.remotes[0].recv()
+        # Give processes time to start up on macOS
+        if platform.system() == "Darwin":
+            import time
+            time.sleep(0.1)
+
+        try:
+            self.remotes[0].send(("get_spaces", None))
+            observation_space, action_space = self.remotes[0].recv()
+        except EOFError as e:
+            # Clean up processes if initialization fails
+            for process in self.processes:
+                if process.is_alive():
+                    process.terminate()
+                    process.join(timeout=1)
+            raise RuntimeError(f"Failed to initialize environment processes. "
+                             f"This may be due to multiprocessing issues on macOS. "
+                             f"Try setting OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES environment variable. "
+                             f"Original error: {e}")
 
         super().__init__(len(env_fns), observation_space, action_space)
         

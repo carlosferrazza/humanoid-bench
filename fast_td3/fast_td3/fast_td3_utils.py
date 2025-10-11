@@ -494,6 +494,7 @@ class SimpleReplayBufferGNN(nn.Module):
         n_obs: int,
         n_act: int,
         n_critic_obs: int,
+        env_name=str,
         asymmetric_obs: bool = False,
         playground_mode: bool = False,
         n_steps: int = 1,
@@ -510,11 +511,22 @@ class SimpleReplayBufferGNN(nn.Module):
         """
         super().__init__()
 
+        if env_name in [
+        "h1-push-v0",
+        "h1-basketball-v0",
+        "h1-package-v0",
+        "h1-sit_hard-v0",
+        "h1-balance_simple-v0",
+        ]: 
+            n_xpos = 21
+        else:
+            n_xpos = 20
+
         self.n_env = n_env
         self.buffer_size = buffer_size
         self.n_obs = n_obs
         self.n_act = n_act
-        self.n_xpos = 20
+        self.n_xpos = n_xpos
         self.n_critic_obs = n_critic_obs
         self.asymmetric_obs = asymmetric_obs
         self.playground_mode = playground_mode and asymmetric_obs
@@ -616,7 +628,6 @@ class SimpleReplayBufferGNN(nn.Module):
                 (self.n_env, batch_size),
                 device=self.device,
             )
-            
             obs_indices = indices.unsqueeze(-1).expand(-1, -1, self.n_obs)
             act_indices = indices.unsqueeze(-1).expand(-1, -1, self.n_act)
             observations = torch.gather(self.observations, 1, obs_indices).reshape(
@@ -628,18 +639,9 @@ class SimpleReplayBufferGNN(nn.Module):
             actions = torch.gather(self.actions, 1, act_indices).reshape(
                 self.n_env * batch_size, self.n_act
             )
-            # xposs = torch.gather( 
-            #     self.xposs, 1, obs_indices.unsqueeze(-1).expand(-1, -1, self.n_xpos, 3)
-            # ).reshape(self.n_env * batch_size, self.n_xpos, 3)
-            # next_xposs = torch.gather(
-            #     self.next_xposs, 1, obs_indices.unsqueeze(-1).expand(-1, -1, self.n_xpos, 3)
-            # ).reshape(self.n_env * batch_size, self.n_xpos, 3)
-
             env_ids = torch.arange(self.n_env, device=self.device).unsqueeze(1).expand(-1, batch_size)
             xposs = self.xposs[env_ids, indices].reshape(self.n_env * batch_size, self.n_xpos, 3)
             next_xposs = self.next_xposs[env_ids, indices].reshape(self.n_env * batch_size, self.n_xpos, 3)
-
-            
             rewards = torch.gather(self.rewards, 1, indices).reshape(
                 self.n_env * batch_size
             )

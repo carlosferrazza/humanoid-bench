@@ -23,6 +23,7 @@ from torch.amp import autocast, GradScaler
 from tensordict import TensorDict, from_module
 
 torch.autograd.set_detect_anomaly(True)
+torch.backends.cudnn.benchmark = False
 torch.set_float32_matmul_precision("high")
 from fast_td3.fast_td3_utils import (
     EmpiricalNormalization,
@@ -30,14 +31,8 @@ from fast_td3.fast_td3_utils import (
     save_params,
 )
 from fast_td3 import Critic
-from fast_td3.actors import (
-    ActorEGNN,
-    Actor,
-    ActorMPNN,
-    ActorHEPI,
-    ActorAEGNN,
-    ActorPONITA,
-)
+
+from fast_td3.train_utils import print_gradient_stats, create_actor, collect_gradient_stats
 from fast_td3.hyperparams import HumanoidBenchArgs
 import argparse
 from fast_td3.environments.humanoid_bench_env import HumanoidBenchEnv
@@ -48,100 +43,6 @@ import tempfile
 import os
 
 
-def create_actor(
-    actor_type,
-    n_obs,
-    n_act,
-    num_envs,
-    batch_size,
-    device,
-    init_scale,
-    model_kwargs,
-    actor_hidden_dim=None,
-):
-    """
-    Helper function to create an actor based on the specified type.
-
-    Args:
-        actor_type (str): Type of actor ("egnn", "mlp", "mpnn", "hepi")
-        n_obs (int): Number of observations
-        n_act (int): Number of actions
-        num_envs (int): Number of environments
-        batch_size (int): Batch size
-        device (torch.device): Device to place the actor on
-        init_scale (float): Initialization scale
-        model_kwargs (dict): Additional model parameters
-        actor_hidden_dim (int, optional): Hidden dimension for MLP actor
-
-    Returns:
-        Actor: The created actor instance
-
-    Raises:
-        ValueError: If actor_type is not supported
-    """
-    if actor_type == "egnn":
-        return ActorEGNN(
-            n_obs=n_obs,
-            n_act=n_act,
-            num_envs=num_envs,
-            batch_size=batch_size,
-            device=device,
-            init_scale=init_scale,
-            **model_kwargs,
-        )
-    elif actor_type == "mlp":
-        return Actor(
-            n_obs=n_obs,
-            n_act=n_act,
-            num_envs=num_envs,
-            device=device,
-            init_scale=init_scale,
-            hidden_dim=actor_hidden_dim,
-        )
-    elif actor_type == "mpnn":
-        return ActorMPNN(
-            n_obs=n_obs,
-            n_act=n_act,
-            num_envs=num_envs,
-            batch_size=batch_size,
-            device=device,
-            **model_kwargs,
-        )
-    elif actor_type == "hepi":
-        return ActorHEPI(
-            n_obs=n_obs,
-            n_act=n_act,
-            num_envs=num_envs,
-            batch_size=batch_size,
-            device=device,
-            **model_kwargs,
-        )
-    elif actor_type == "aegnn":
-        return ActorAEGNN(
-            n_obs=n_obs,
-            n_act=n_act,
-            num_envs=num_envs,
-            batch_size=batch_size,
-            device=device,
-            init_scale=init_scale,
-            **model_kwargs,
-        )
-    elif actor_type == "ponita":
-        return ActorPONITA(
-            n_obs=n_obs,
-            n_act=n_act,
-            num_envs=num_envs,
-            batch_size=batch_size,
-            device=device,
-            robot="h1",
-            **model_kwargs,
-        )
-    else:
-        raise ValueError(
-            f"Unsupported actor type: {actor_type}. Supported types are: egnn, mlp, mpnn, hepi"
-        )
-
-
 def main():
     parser = argparse.ArgumentParser(description="Train humanoid using FastTD3")
     parser.add_argument(
@@ -149,7 +50,7 @@ def main():
         type=str,
         default="egnn",
         help="The kind of actor to use.",
-        choices=["egnn", "mlp", "mpnn", "hepi", "aegnn", "ponita"],
+        choices=["egnn", "mlp", "mpnn", "hepi", "aegnn", "ponita", "hegnn", "egnn_film"],
     )
     parser.add_argument("--env_name", type=str, default="h1-stand-v0")
     parser.add_argument(
@@ -214,17 +115,11 @@ def main():
     print(f"Training with args: {terminal_args}")
 
     use_wandb = terminal_args["wandb"]
-    uid = uuid.uuid4().hex[:6]  # 6-char unique ID
-
-    run_name = (
-        f"{terminal_args['actor']}_"
-        f"{args.env_name}_"
-        f"{args.num_envs}envs_"
-        f"{args.total_timesteps}steps_"
-        f"{uid}"
-    )
 
     if use_wandb:
+        uid = uuid.uuid4().hex[:6]  # 6-char unique ID
+        run_name = f"{terminal_args['actor']}_{args.env_name}_{args.num_envs}envs_{args.total_timesteps}steps_{uid}"
+        
         wandb.init(
             entity="thuaduc24042001-technical-university-of-munich",
             project="FastTD3 - new",
@@ -236,7 +131,12 @@ def main():
                 _disable_meta=True,  # disables system metadata collection
             ),
         )
-        wandb.save("fast_td3/robots/h1.py")
+        
+        wandb.save("fast_td3/actors/gnn/egnn.py")
+        wandb.save("fast_td3/robots/H1.py")
+        wandb.save("fast_td3/robots/graph_builder.py")
+
+
 
     amp_enabled = args.amp and args.cuda and torch.cuda.is_available()
     amp_device_type = (
@@ -283,12 +183,23 @@ def main():
         n_critic_obs = n_obs
     action_low, action_high = -1.0, 1.0
 
+    if terminal_args["env_name"] in [
+        "h1-push-v0",
+        "h1-basketball-v0",
+        "h1-package-v0",
+        "h1-sit_hard-v0",
+        "h1-balance_simple-v0",
+    ]: 
+        n_xpos = 21
+    else:
+        n_xpos = 20
+
     if args.obs_normalization:
         obs_normalizer = EmpiricalNormalization(shape=n_obs, device=device)
         critic_obs_normalizer = EmpiricalNormalization(
             shape=n_critic_obs, device=device
         )
-        xpos_normalizer = EmpiricalNormalization(shape=(20, 3), device=device)
+        xpos_normalizer = EmpiricalNormalization(shape=(n_xpos, 3), device=device)
     else:
         obs_normalizer = nn.Identity()
         critic_obs_normalizer = nn.Identity()
@@ -307,6 +218,7 @@ def main():
         batch_size=args.batch_size,
         device=device,
         init_scale=args.init_scale,
+        env_name=terminal_args["env_name"],
         model_kwargs=model_kwargs,
         actor_hidden_dim=args.actor_hidden_dim,
     )
@@ -318,22 +230,14 @@ def main():
         batch_size=args.batch_size,
         device=device,
         init_scale=args.init_scale,
+        env_name=terminal_args["env_name"],
         model_kwargs=model_kwargs,
         actor_hidden_dim=args.actor_hidden_dim,
     )
 
-    # For PONITA actors, we need to initialize LazyLinear layers before copying parameters
-    if terminal_args["actor"] == "ponita":
-        # Get initial observations to initialize the LazyLinear layers
-        if envs.asymmetric_obs:
-            init_obs, init_critic_obs = envs.reset_with_critic_obs()
-            init_critic_obs = torch.as_tensor(
-                init_critic_obs, device=device, dtype=torch.float
-            )
-        else:
-            init_obs, init_xpos = envs.reset()
-
-        # Initialize the main actor's LazyLinear layers with a dummy forward pass
+    # For actors with LazyLinear layers (PONITA, EGNN with mixed types), we need to initialize them before copying parameters
+    if terminal_args["actor"] in ["ponita", "egnn"]:
+        init_obs, init_xpos = envs.reset()
         with torch.no_grad():
             _ = actor(init_obs.to(device), init_xpos.to(device))
 
@@ -388,6 +292,7 @@ def main():
         n_steps=args.num_steps,
         gamma=args.gamma,
         device=device,
+        env_name=terminal_args["env_name"],
     )
 
     checkpoint_path = terminal_args["checkpoint_path"]
@@ -635,6 +540,10 @@ def main():
         scaler.scale(qf_loss).backward()
         scaler.unscale_(q_optimizer)
 
+        # Monitor critic gradients before clipping (every 10 steps)
+        # if global_step % 10 == 0:
+        #     print_gradient_stats(qnet, "Critic", global_step, detailed=False)
+        
         # Gradient clipping to prevent exploding gradients
         critic_grad_norm = torch.nn.utils.clip_grad_norm_(
             qnet.parameters(),
@@ -696,7 +605,7 @@ def main():
         actor_optimizer.zero_grad(set_to_none=True)
         scaler.scale(actor_loss).backward()
         scaler.unscale_(actor_optimizer)
-
+        
         # Gradient clipping to prevent exploding gradients
         actor_grad_norm = torch.nn.utils.clip_grad_norm_(
             actor.parameters(),
@@ -910,6 +819,11 @@ def main():
                         "buffer_rewards": logs_dict["buffer_rewards"].mean(),
                         "env_rewards": rewards.mean(),
                     }
+                    
+                    # Collect detailed gradient statistics for actor (every 500 steps to avoid overhead)
+                    if use_wandb and global_step % 500 == 0:
+                        grad_stats = collect_gradient_stats(actor, "actor")
+                        logs.update(grad_stats)
 
                     # EVALUATION: Test current policy performance without exploration
                     if args.eval_interval > 0 and global_step % args.eval_interval == 0:

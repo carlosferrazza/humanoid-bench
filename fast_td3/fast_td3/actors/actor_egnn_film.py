@@ -1,10 +1,23 @@
+"""
+Actor using EGNN with FiLM (Feature-wise Linear Modulation) for root context conditioning.
+"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from fast_td3.actors.gnn.egnn import EGNN
+from fast_td3.actors.gnn.egnn_film import EGNN_FiLM
 
-class ActorEGNN(nn.Module):
+
+class ActorEGNN_FiLM(nn.Module):
+    """
+    Actor network using EGNN with FiLM conditioning.
+    
+    Key advantage over concatenation:
+    - Root features modulate processing at each layer rather than just being input
+    - More parameter efficient (smaller input dimension)
+    - Better at adapting computation based on global state
+    """
+    
     def __init__(
         self,
         n_obs: int,
@@ -25,6 +38,7 @@ class ActorEGNN(nn.Module):
         coords_agg: str = "mean",
         normalize: bool = False,
         tanh: bool = False,
+        use_film: bool = True,  # Enable/disable FiLM for ablation
     ):
         super().__init__()
         self.n_act = n_act
@@ -40,8 +54,8 @@ class ActorEGNN(nn.Module):
             case _:
                 raise ValueError(f"Unknown activation function: {act_fn}")
 
-        # EGNN for message passing
-        self.egnn = EGNN(
+        # EGNN with FiLM for message passing
+        self.egnn = EGNN_FiLM(
             hidden_nf=hidden_dim,
             out_node_nf=1,
             in_edge_nf=n_edge_feat,
@@ -55,6 +69,7 @@ class ActorEGNN(nn.Module):
             normalize=normalize,
             tanh=tanh,
             env_name=env_name,
+            use_film=use_film,
         )
 
         # Initialize noise parameters

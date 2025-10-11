@@ -10,7 +10,7 @@ from .ponita.hetero_fiber_conv import HeteroFiberConv
 from .ponita.ponita import GridGenerator, PolynomialFeatures
 from .ponita.utils.to_from_sphere import scalar_to_sphere, vec_to_sphere
 from fast_td3.skeleton_builder import build_edge_index_and_attr_mpnn
-from fast_td3.robots.h1 import h1
+# from fast_td3.robots.h1 import h1
 
 
 class HEPi(BaseGNN):
@@ -195,20 +195,21 @@ class HEPi(BaseGNN):
                 2
             )  # (B*N, 2)
 
-        result, _ = self.one_step(
-            graph=h1.create_joint_graph(
-                batch_edge_index=edge_index,
-                batch_edge_attr=edge_attr,
-                joint_positions=x,
-            ),
-            u_dict=self.construct_joint_input(
-                robot=h1, joint_features=h, joint_positions=x, device=self.device
-            ),
-        )
+        # result, _ = self.one_step(
+        #     graph=h1.create_joint_graph(
+        #         batch_edge_index=edge_index,
+        #         batch_edge_attr=edge_attr,
+        #         joint_positions=x,
+        #     ),
+        #     u_dict=self.construct_joint_input(
+        #         robot=h1, joint_features=h, joint_positions=x, device=self.device
+        #     ),
+        # )
 
         num_acts = self.num_nodes
 
-        return result.view(batch_size, num_acts)
+        # return result.view(batch_size, num_acts)
+        return None
 
     def one_step(
         self,

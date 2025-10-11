@@ -1,6 +1,6 @@
 {
-    "hidden_dim": 80,
+    "hidden_dim": 82,
     "n_layers": 4,
     "act_fn": "silu",
-    "n_edge_feat": 1
+    "n_edge_feat": 0
 }

@@ -130,12 +130,12 @@ class E_GCL(nn.Module):
         """
         row, col = edge_index
         trans = coord_diff * self.coord_mlp(edge_feat)
-        if self.coords_agg == 'sum':
+        if self.coords_agg == "sum":
             agg = unsorted_segment_sum(trans, row, num_segments=coord.size(0))
-        elif self.coords_agg == 'mean':
+        elif self.coords_agg == "mean":
             agg = unsorted_segment_mean(trans, row, num_segments=coord.size(0))
         else:
-            raise Exception('Wrong coords_agg parameter' % self.coords_agg)
+            raise Exception("Wrong coords_agg parameter" % self.coords_agg)
         coord = coord + agg.clamp(-10, 10)
         return coord
 
@@ -239,42 +239,89 @@ class EGNN(nn.Module):
                 for _ in range(n_layers)
             ]
         )
-    
+
+        self.joint_embedding_in = nn.Sequential(nn.LazyLinear(self.hidden_nf), act_fn)
+        # Object MLP for local processing within object cluster
+        self.object_mlp = nn.Sequential(nn.LazyLinear(self.hidden_nf), act_fn)
+
+        self.global_aggregation = nn.Sequential(
+            nn.Linear(
+                self.hidden_nf * 2, self.hidden_nf * 4
+            ),  # concat [joint_feat, object_feat]
+            act_fn,
+            nn.Linear(self.hidden_nf * 4, self.hidden_nf * 2),
+            act_fn,
+            nn.Linear(self.hidden_nf * 2, self.out_node_nf),
+        )
+
+        self.to(self.device)
+        # Initialize edge cache - will be populated dynamically as new batch sizes are encountered
+        self._edges_cache = {}
+
+    def forward(self, obs: torch.Tensor, xpos: torch.Tensor) -> torch.Tensor:
+        current_batch_size = obs.shape[0]
+        edges = self.get_cached_edges(current_batch_size)
 
         if self.has_mixed_node_types:
-            self.joint_embedding_in = nn.Sequential(
-                nn.LazyLinear(self.hidden_nf), act_fn
-            )
-            # Object MLP for local processing within object cluster
-            self.object_mlp = nn.Sequential(
-                nn.LazyLinear(self.hidden_nf),
-                act_fn
-            )
-
-            self.global_aggregation = nn.Sequential(
-                nn.Linear(self.hidden_nf * 2, self.hidden_nf * 4),  # concat [joint_feat, object_feat]
-                act_fn,
-                nn.Linear(self.hidden_nf * 4, self.hidden_nf * 4),
-                act_fn,
-                nn.Linear(self.hidden_nf * 4, self.out_node_nf),
-            )
-
-            self.skip_proj = nn.Linear(self.hidden_nf * 2, self.out_node_nf)
+            return self.process_mixed_types(obs, xpos, edges, current_batch_size)
         else:
-            # Single embedding layer for backward compatibility
-            self.embedding_in = nn.Sequential(
-                nn.LazyLinear(self.hidden_nf), act_fn
-            )
-            self.embedding_out = nn.Sequential(
-                nn.Linear(self.hidden_nf, out_node_nf),
-                nn.Tanh(),
-            )
-    
-        self.to(self.device)
+            return self.process_single_type(obs, xpos, edges, current_batch_size)
 
+    def process_mixed_types(
+        self,
+        obs: torch.Tensor,
+        xpos: torch.Tensor,
+        edges: torch.Tensor,
+        current_batch_size: int,
+    ) -> torch.Tensor:
+        """Process environments with objects using separate clusters for joints and objects."""
+        h_joint, h_object, x_joint, _ = (
+            self.graph_builder.generate_input_for_mixed_type(obs, xpos)
+        )
 
-        # Initialize edge cache - will be populated dynamically as new batch sizes are encountered
-        self._edge_cache = {}
+        h_joints = self.joint_embedding_in(h_joint)
+        for layer in self.layers:
+            h_joints, x_joint, _ = layer(h=h_joints, edge_index=edges, coord=x_joint)
+        h_joints_batched = (
+            h_joints.view(current_batch_size, self.num_joints, self.hidden_nf) * 5
+        )
+
+        h_object_processed = self.object_mlp(h_object)
+        h_object_broadcasted = h_object_processed.unsqueeze(1).expand(
+            -1, self.num_joints, -1
+        )
+
+        h_concat = torch.cat([h_joints_batched, h_object_broadcasted], dim=-1)
+        h_global = self.global_aggregation(h_concat)
+
+        actions = torch.tanh(h_global)
+        return actions.view(current_batch_size, self.num_joints)
+
+    def process_single_type(
+        self,
+        obs: torch.Tensor,
+        xpos: torch.Tensor,
+        edges: torch.Tensor,
+        current_batch_size: int,
+    ) -> torch.Tensor:
+        """Process environments without objects using joints and root context."""
+        h_joints, x_joint, h_root = self.graph_builder.generate_input(obs, xpos)
+
+        h_joints = self.joint_embedding_in(h_joints)
+        for layer in self.layers:
+            h_joints, x_joint, _ = layer(h=h_joints, edge_index=edges, coord=x_joint)
+        h_joints_batched = (
+            h_joints.view(current_batch_size, self.num_joints, self.hidden_nf) * 2
+        )
+
+        h_root = self.object_mlp(h_root)
+        h_root_broadcasted = h_root.unsqueeze(1).expand(-1, self.num_joints, -1)
+
+        h_concat = torch.cat([h_joints_batched, h_root_broadcasted], dim=-1)
+        h_global = self.global_aggregation(h_concat)
+
+        actions = torch.tanh(h_global)
+        return actions.view(current_batch_size, self.num_joints)
 
     def generate_index(self, batch_size: int, device="cuda"):
         """
@@ -283,79 +330,31 @@ class EGNN(nn.Module):
         """
         # Always use joint-to-joint connections only
         src, dst = zip(*self.graph_builder.robot.joint_connections)
-        
+
         # Convert to tensors
         src = torch.tensor(src, dtype=torch.long, device=device)
         dst = torch.tensor(dst, dtype=torch.long, device=device)
-        edge_attr = torch.zeros(len(src), dtype=torch.float, device=device)
-        num_nodes_per_batch = len(self.graph_builder.robot.JOINT)
 
         # Create batch offsets and expand edges
-        offsets = torch.arange(batch_size, device=device) * num_nodes_per_batch
+        offsets = torch.arange(batch_size, device=device) * self.num_joints
         src_batch = (src.unsqueeze(0) + offsets.unsqueeze(1)).flatten()
         dst_batch = (dst.unsqueeze(0) + offsets.unsqueeze(1)).flatten()
-        edge_attr_batch = edge_attr.repeat(batch_size).unsqueeze(-1)
 
-        return torch.stack([src_batch, dst_batch]), edge_attr_batch, None
+        return torch.stack([src_batch, dst_batch])
 
-    def _get_cached_edges(self, current_batch_size: int):
+    def get_cached_edges(self, current_batch_size: int):
         """
         Optimized method to get edge indices with dynamic caching.
         Automatically caches new batch sizes as they're encountered.
         """
         # Check if already cached
-        if current_batch_size in self._edge_cache:
-            return self._edge_cache[current_batch_size]
+        if current_batch_size in self._edges_cache:
+            return self._edges_cache[current_batch_size]
 
         # Generate, cache, and return
-        edge_data = self.generate_index(current_batch_size, self.device)
-        self._edge_cache[current_batch_size] = edge_data
-        return edge_data
-
-    def forward(self, obs: torch.Tensor, xpos: torch.Tensor) -> torch.Tensor:
-        current_batch_size = obs.shape[0]
-        edges, _, _ = self._get_cached_edges(current_batch_size)
-
-        if self.has_mixed_node_types:
-            # === STEP 1: Local Processing within Clusters ===
-
-            # 1a. Extract joint and object features
-            h_joint, h_object, x_joint, _ = self.graph_builder.generate_input_for_mixed_type(obs, xpos)
-
-            # 1b. Process objects locally with MLP (object cluster)
-            h_object_processed = self.object_mlp(h_object)  # [batch, hidden_nf]
-
-            # 1c. Process joints locally with EGNN (actuator cluster)
-            h_joint_embedded = self.joint_embedding_in(h_joint)  # [batch*num_joints, hidden_nf]
-            h_joints = h_joint_embedded
-            for layer in self.layers:
-                h_joints, x_joint, _ = layer(h=h_joints, edge_index=edges, coord=x_joint)
-
-            # === STEP 2: Global Aggregation via Directed Fully-Connected Inter-Edges ===
-            # (object -> all joints)
-            h_joints_batched = h_joints.view(current_batch_size, self.num_joints, self.hidden_nf)
-            h_object_broadcasted = h_object_processed.unsqueeze(1).expand(-1, self.num_joints, -1)
-            h_joint_object_concat = torch.cat([h_joints_batched, h_object_broadcasted], dim=-1)
-
-            # MLP computes context-dependent delta for each joint
-            h_delta = self.global_aggregation(h_joint_object_concat)  # [batch, num_joints, 1]
-
-            # === Residual connection ===
-            h_skip = self.skip_proj(h_joint_object_concat)  # [batch, num_joints, 1]
-            h_global = h_skip + h_delta
-
-            # Final bounded joint actions
-            actions = torch.tanh(h_global)
-            return actions.view(current_batch_size, self.num_joints)
-
-        else:
-            h, x = self.graph_builder.generate_input(obs, xpos)
-            h = self.embedding_in(h)
-            for layer in self.layers:
-                h, x, _ = layer(h=h, edge_index=edges, coord=x)
-            h = self.embedding_out(h)
-            h = h.view(current_batch_size, self.num_joints)
-            return torch.tanh(h)
+        edges = self.generate_index(current_batch_size, self.device)
+        self._edges_cache[current_batch_size] = edges
+        return edges
 
 
 def unsorted_segment_sum(data, segment_ids, num_segments):

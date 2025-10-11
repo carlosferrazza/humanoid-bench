@@ -68,7 +68,7 @@ def test_data(device):
         robot="h1",
         act_fn=nn.ReLU()
     )
-    segment_ids = egnn.generate_index(8192, device)[0][0]
+    segment_ids = egnn.generate_index(8192, device)[0]
     
     return data, segment_ids, num_segments
 
@@ -144,25 +144,25 @@ class TestSegmentAggregation:
         assert torch.allclose(result_old, result_new, atol=1e-6), \
             "New mean implementation doesn't match reference"
     
-    # def test_unsorted_segment_sum_large_data_correctness(self, test_data):
-    #     """Test correctness on large realistic data."""
-    #     data, segment_ids, num_segments = test_data
+    def test_unsorted_segment_sum_large_data_correctness(self, test_data):
+        """Test correctness on large realistic data."""
+        data, segment_ids, num_segments = test_data
         
-    #     result_old = unsorted_segment_sum_old(data, segment_ids, num_segments)
-    #     result_new = unsorted_segment_sum_new(data, segment_ids, num_segments)
+        result_old = unsorted_segment_sum_old(data, segment_ids, num_segments)
+        result_new = unsorted_segment_sum_new(data, segment_ids, num_segments)
         
-    #     assert torch.allclose(result_old, result_new, rtol=1e-5, atol=1e-5), \
-    #         "New sum implementation doesn't match reference on large data"
+        assert torch.allclose(result_old, result_new, rtol=1e-5, atol=1e-5), \
+            "New sum implementation doesn't match reference on large data"
     
-    # def test_unsorted_segment_mean_large_data_correctness(self, test_data):
-    #     """Test correctness on large realistic data."""
-    #     data, segment_ids, num_segments = test_data
+    def test_unsorted_segment_mean_large_data_correctness(self, test_data):
+        """Test correctness on large realistic data."""
+        data, segment_ids, num_segments = test_data
         
-    #     result_old = unsorted_segment_mean_old(data, segment_ids, num_segments)
-    #     result_new = unsorted_segment_mean_new(data, segment_ids, num_segments)
+        result_old = unsorted_segment_mean_old(data, segment_ids, num_segments)
+        result_new = unsorted_segment_mean_new(data, segment_ids, num_segments)
         
-    #     assert torch.allclose(result_old, result_new, atol=1e-6), \
-    #         "New mean implementation doesn't match reference on large data"
+        assert torch.allclose(result_old, result_new, atol=1e-6), \
+            "New mean implementation doesn't match reference on large data"
     
     def test_empty_segments(self, device):
         """Test behavior with empty segments."""

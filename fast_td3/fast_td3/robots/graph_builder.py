@@ -1,9 +1,7 @@
 import enum
 import networkx as nx
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 import torch
-import torch._dynamo
 
 from .h1 import H1
 
@@ -19,11 +17,11 @@ class EdgeType(enum.IntEnum):
 
 
 env_with_object = [
-    "h1-push-v0", # medium
-    "h1-basketball-v0", # very hard
-    "h1-package-v0", # medium
-    "h1-sit_hard-v0", # hard
-    "h1-balance_simple-v0", # hard
+    "h1-push-v0",  # medium
+    "h1-basketball-v0",  # very hard
+    "h1-package-v0",  # medium
+    "h1-sit_hard-v0",  # hard
+    "h1-balance_simple-v0",  # hard
 ]
 
 env_without_object = [
@@ -51,7 +49,9 @@ class GraphBuilder:
       - explicit with_object flag passed to __init__ or visualize_graph()
     """
 
-    def __init__(self, env_name, batch_size, device, robot="h1", with_object: bool | None = None):
+    def __init__(
+        self, env_name, batch_size, device, robot="h1", with_object: bool | None = None
+    ):
         if robot.lower() == "h1":
             # Decide whether to construct robot with object: explicit flag overrides env inference
             if with_object is None:
@@ -67,20 +67,35 @@ class GraphBuilder:
         self.batch_size = batch_size
         self.num_edges = self.robot.joint_connections.__len__()
 
-
     # obs = qpos + qvel
     # structure of obs: /home/duckoid/Downloads/humanoid-bench/fast_td3/src/humanoid-bench/humanoid_bench/tasks.py
     @torch.compile
     def generate_input(self, obs: torch.tensor, xpos: torch.tensor):
+        """Generate input with root information as global context."""
         assert obs.shape[1] == 51, f"obs shape: {obs.shape}"
         assert xpos.shape[1] == 20, f"xpos shape: {xpos.shape}"
-        h = torch.cat(
-            [obs[:, 7:26].reshape(-1, 1), obs[:, 32:].reshape(-1, 1)], dim=1
-        )
-        x = (xpos[:, 1:] - xpos[:, [0]]).reshape(-1, 3)
 
-        return h, x
-    
+        # Extract root features (13 values)
+        root_features = torch.cat(
+            [obs[:, 0:7], obs[:, 26:32]],  # root pos (3) + quat (4) = 7  # root vel (6)
+            dim=1,
+        )  # [batch, 13]
+
+        # Extract joint features
+        joint_pos = obs[:, 7:26].reshape(-1, 1)  # [batch*19, 1]
+        joint_vel = obs[:, 32:].reshape(-1, 1)  # [batch*19, 1]
+
+        # Concatenate: each joint gets [pos, vel, root_context]
+        h = torch.cat(
+            [joint_pos, joint_vel],  # 1 value  # 1 value  # 13 values
+            dim=1,
+        )  # [batch*19, 2]
+
+        # Positions remain relative to root (unchanged)
+        x = (xpos[:, 1:] - xpos[:, [0]]).reshape(-1, 3)  # [batch*19, 3]
+
+        return h, x, root_features
+
     # h = qpos concat qvel
     @torch.compile(dynamic=True)
     def generate_input_for_mixed_type(self, obs: torch.tensor, xpos: torch.tensor):
@@ -89,38 +104,30 @@ class GraphBuilder:
             x_joint = (xpos[:, 1:20] - xpos[:, [0]]).reshape(-1, 3)
             x_object = (xpos[:, 20:] - xpos[:, [0]]).reshape(-1, 3)
 
-            # square distance from each joint to object
-            distant_joint_to_object = (xpos[:, 1:20] - xpos[:, [20]]).reshape(-1, 3).pow(2).sum(dim=-1, keepdim=True)
+            # # square distance from each joint to object
+            # distant_joint_to_object = (
+            #     (xpos[:, 1:20] - xpos[:, [20]])
+            #     .reshape(-1, 3)
+            #     .pow(2)
+            #     .sum(dim=-1, keepdim=True)
+            # )
 
-            assert obs.shape[1] == 64, f"obs shape: {obs.shape}"
-            assert xpos.shape[1] == 21, f"xpos shape: {xpos.shape}"
-            h_node = torch.cat([
-                obs[:, 7:26].reshape(-1, 1),
-                obs[:, 39:58].reshape(-1, 1),
-                distant_joint_to_object
-            ], dim=1)
-            
-            h_object = torch.cat([
-                obs[:, 26:33],
-                obs[:, 58:64]
-            ], dim=1)
+            h_node = torch.cat(
+                [
+                    obs[:, 7:26].reshape(-1, 1),
+                    obs[:, 39:58].reshape(-1, 1),
+                ],
+                dim=1,
+            )
+
+            # position, quarternion, linear velocity, angular velocity of pelvis and object
+            h_object = torch.cat([obs[:, 0:7], obs[:, 26:39], obs[:, 58:64]], dim=1)
 
             return h_node, h_object, x_joint, x_object
 
-    def generate_input_for_env_with_object(self, obs: torch.tensor, xpos: torch.tensor):
-        if self.env_name in env_with_object:
-            #assert obs.shape[1] == 63, f"obs shape: {obs.shape}"
-            #assert xpos.shape[1] == 21, f"xpos shape: {xpos.shape}"
-            h_node = torch.cat([
-                obs[:, 7:26].reshape(-1, 1),
-                obs[:, 39:58].reshape(-1, 1),
-            ], dim=1)
-            
-            x = (xpos[:, 1:] - xpos[:, [0]]).reshape(-1, 3)
-
-            return h_node, x        
-
-    def visualize_graph(self, with_object: bool | None = None, save_path: str = "robot_graph.png"):
+    def visualize_graph(
+        self, with_object: bool | None = None, save_path: str = "robot_graph.png"
+    ):
         """Visualize the current graph.
 
         Args:

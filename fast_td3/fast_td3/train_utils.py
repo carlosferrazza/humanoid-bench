@@ -127,6 +127,71 @@ def print_gradient_stats(model, model_name, step, detailed=False):
     print(f"{'='*80}\n")
 
 
+def collect_gradient_stats(model, model_name="model"):
+    """
+    Collect gradient norm statistics for wandb logging.
+    
+    Args:
+        model: The neural network model
+        model_name: Name of the model (e.g., "actor", "critic")
+    
+    Returns:
+        dict: Dictionary of gradient norms for wandb logging
+    """
+    stats = {}
+    
+    # Group gradients by layer type
+    layer_groups = {}
+    
+    for name, param in model.named_parameters():
+        if param.grad is None:
+            continue
+        
+        # Categorize parameters
+        if "embedding_in" in name or "embedding_out" in name:
+            group = "embeddings"
+        elif "joint_embedding" in name or "object_embedding" in name or "object_mlp" in name:
+            group = "input_embeddings"
+        elif "layers" in name:
+            # Extract layer number
+            parts = name.split(".")
+            layer_idx = next((i for i, p in enumerate(parts) if p == "layers"), None)
+            layer_num = parts[layer_idx + 1] if layer_idx and layer_idx + 1 < len(parts) else "?"
+            
+            if "edge_mlp" in name:
+                group = f"layer{layer_num}_edge"
+            elif "coord_mlp" in name:
+                group = f"layer{layer_num}_coord"
+            elif "node_mlp" in name:
+                group = f"layer{layer_num}_node"
+            else:
+                group = f"layer{layer_num}_other"
+        elif "global_aggregation" in name:
+            group = "global_aggregation"
+        elif "skip_proj" in name:
+            group = "skip_projection"
+        else:
+            group = "other"
+        
+        if group not in layer_groups:
+            layer_groups[group] = []
+        
+        layer_groups[group].append(param.grad)
+    
+    # Compute gradient norm for each group
+    for group, grads in layer_groups.items():
+        all_grads = torch.cat([g.flatten() for g in grads])
+        stats[f"{model_name}/grad_{group}_norm"] = all_grads.norm().item()
+    
+    # Overall gradient norm
+    all_params_grads = [p.grad.flatten() for p in model.parameters() if p.grad is not None]
+    if all_params_grads:
+        all_grads = torch.cat(all_params_grads)
+        stats[f"{model_name}/grad_overall_norm"] = all_grads.norm().item()
+    
+    return stats
+
+
 def create_actor(
     actor_type,
     n_obs,
@@ -167,7 +232,8 @@ def create_actor(
         ActorHEPI,
         ActorAEGNN,
         ActorPONITA,
-        ActorHEGNN
+        ActorHEGNN,
+        ActorEGNN_FiLM,
     )
     
     if actor_type == "egnn":
@@ -239,7 +305,18 @@ def create_actor(
             env_name=env_name,
             **model_kwargs,
         )
+    elif actor_type == "egnn_film":
+        return ActorEGNN_FiLM(
+            n_obs=n_obs,
+            n_act=n_act,
+            num_envs=num_envs,
+            batch_size=batch_size,
+            device=device,
+            init_scale=init_scale,
+            env_name=env_name,
+            **model_kwargs,
+        )
     else:
         raise ValueError(
-            f"Unsupported actor type: {actor_type}. Supported types are: egnn, mlp, mpnn, hepi, aegnn, ponita, hegnn"
+            f"Unsupported actor type: {actor_type}. Supported types are: egnn, mlp, mpnn, hepi, aegnn, ponita, hegnn, egnn_film"
         )

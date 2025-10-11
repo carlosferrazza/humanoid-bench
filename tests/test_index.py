@@ -24,14 +24,11 @@ def device():
 def test_data(device):
     """Generate test data for segment aggregation functions."""
     torch.manual_seed(42)  # Fixed seed for reproducible tests
-    N, D, num_segments = 622592, 64, 155648
-    
-    data = torch.randn(N, D, device=device, dtype=torch.float32)
-    
+
     # Generate segment_ids using EGNN
     egnn = EGNN(
         hidden_nf=128,
-        out_node_nf=D,
+        out_node_nf=1,
         in_edge_nf=64,
         device=device,
         batch_size=8192,
@@ -41,15 +38,15 @@ def test_data(device):
         act_fn=nn.ReLU()
     )
 
-    return egnn._get_cached_edges(8192)
+    return egnn.get_cached_edges(8192)
 
 
 class TestIndex:
     def test_generated_index(self, test_data):
         """Test that the generated segment_ids are valid."""
-        indexes, edge_attr, node_attr = test_data
+        indexes = test_data
 
-        src, dst = indexes
+        src, _ = indexes
 
         assert len(src) % 8192 == 0
         assert src.max() == 8192 * 19 - 1

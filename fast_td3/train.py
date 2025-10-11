@@ -32,7 +32,7 @@ from fast_td3.fast_td3_utils import (
 )
 from fast_td3 import Critic
 
-from fast_td3.train_utils import print_gradient_stats, create_actor
+from fast_td3.train_utils import print_gradient_stats, create_actor, collect_gradient_stats
 from fast_td3.hyperparams import HumanoidBenchArgs
 import argparse
 from fast_td3.environments.humanoid_bench_env import HumanoidBenchEnv
@@ -50,7 +50,7 @@ def main():
         type=str,
         default="egnn",
         help="The kind of actor to use.",
-        choices=["egnn", "mlp", "mpnn", "hepi", "aegnn", "ponita", "hegnn"],
+        choices=["egnn", "mlp", "mpnn", "hepi", "aegnn", "ponita", "hegnn", "egnn_film"],
     )
     parser.add_argument("--env_name", type=str, default="h1-stand-v0")
     parser.add_argument(
@@ -605,10 +605,6 @@ def main():
         actor_optimizer.zero_grad(set_to_none=True)
         scaler.scale(actor_loss).backward()
         scaler.unscale_(actor_optimizer)
-
-        # Monitor actor gradients before clipping (every 10 steps)
-        # if global_step % 10 == 0:
-        #     print_gradient_stats(actor, "Actor", global_step, detailed=False)
         
         # Gradient clipping to prevent exploding gradients
         actor_grad_norm = torch.nn.utils.clip_grad_norm_(
@@ -823,6 +819,11 @@ def main():
                         "buffer_rewards": logs_dict["buffer_rewards"].mean(),
                         "env_rewards": rewards.mean(),
                     }
+                    
+                    # Collect detailed gradient statistics for actor (every 500 steps to avoid overhead)
+                    if use_wandb and global_step % 500 == 0:
+                        grad_stats = collect_gradient_stats(actor, "actor")
+                        logs.update(grad_stats)
 
                     # EVALUATION: Test current policy performance without exploration
                     if args.eval_interval > 0 and global_step % args.eval_interval == 0:

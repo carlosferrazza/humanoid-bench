@@ -40,7 +40,7 @@ class Actor(nn.Module):
         self.register_buffer("std_max", torch.as_tensor(std_max, device=device))
         self.n_envs = num_envs
 
-    def forward(self, obs: torch.Tensor, xpos: torch.Tensor = None) -> torch.Tensor:
+    def forward(self, obs: torch.Tensor, xanchor: torch.Tensor = None) -> torch.Tensor:
 
         x = obs
         x = self.net(x)
@@ -48,7 +48,7 @@ class Actor(nn.Module):
         return action
 
     def explore(
-        self, obs: torch.Tensor, xpos: torch.Tensor = None, dones: torch.Tensor = None, deterministic: bool = False
+        self, obs: torch.Tensor, xanchor: torch.Tensor = None, dones: torch.Tensor = None, deterministic: bool = False
     ) -> torch.Tensor:
         # If dones is provided, resample noise for environments that are done
         if dones is not None and dones.sum() > 0:

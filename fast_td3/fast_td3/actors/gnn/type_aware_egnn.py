@@ -393,7 +393,7 @@ class TypeAwareEGNN(nn.Module):
         self._mask_index_cache[batch_size] = (joint_indices, object_indices)
         return joint_indices, object_indices
 
-    def forward(self, obs: torch.Tensor, xpos: torch.Tensor) -> torch.Tensor:
+    def forward(self, obs: torch.Tensor, xanchor: torch.Tensor) -> torch.Tensor:
         """
         Forward pass for heterogeneous graph with joint and object nodes.
         """
@@ -404,7 +404,7 @@ class TypeAwareEGNN(nn.Module):
 
         # Generate input features for joint and object nodes
         h_joint, h_object, x = self.graph_builder.generate_input_for_mixed_type(
-            obs, xpos
+            obs, xanchor
         )
 
         # Embed joint and object features

@@ -57,15 +57,15 @@ class ActorAEGNN(nn.Module):
         self.register_buffer("std_min", torch.as_tensor(std_min, device=device))
         self.register_buffer("std_max", torch.as_tensor(std_max, device=device))
 
-    def forward(self, obs, xpos) -> torch.Tensor:
-        h, x, edges, edge_attr = self.aegnn.build_batched_angle_input(obs, xpos)
+    def forward(self, obs, xanchor) -> torch.Tensor:
+        h, x, edges, edge_attr = self.aegnn.build_batched_angle_input(obs, xanchor)
 
         result = self.aegnn(h, x, edges, edge_attr)
 
         return result
 
     def explore(
-        self, obs: torch.Tensor, xpos: torch.Tensor, dones: torch.Tensor = None, deterministic: bool = False
+        self, obs: torch.Tensor, xanchor: torch.Tensor, dones: torch.Tensor = None, deterministic: bool = False
     ) -> torch.Tensor:
         # If dones is provided, resample noise for environments that are done
         if dones is not None and dones.sum() > 0:
@@ -80,7 +80,7 @@ class ActorAEGNN(nn.Module):
             dones_view = dones.view(-1, 1) > 0
             self.noise_scales = torch.where(dones_view, new_scales, self.noise_scales)
 
-        act = self(obs, xpos)
+        act = self(obs, xanchor)
         if deterministic:
             return act
 

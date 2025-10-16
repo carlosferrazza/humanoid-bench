@@ -93,6 +93,12 @@ def main():
         help="Additional model parameters (as defined in the class) in JSON format (path to the file)."
         "If not provided, defaults params will be used.",
     )
+    parser.add_argument(
+        "--task_description",
+        type=str,
+        default="",
+        help="Description of the task/experiment to log to wandb.",
+    )
 
     terminal_args = vars(parser.parse_args())
 
@@ -120,11 +126,15 @@ def main():
         uid = uuid.uuid4().hex[:6]  # 6-char unique ID
         run_name = f"{terminal_args['actor']}_{args.env_name}_{args.num_envs}envs_{args.total_timesteps}steps_{uid}"
         
+        config = vars(args)
+        config["actor"] = terminal_args["actor"]
+        config["task_description"] = terminal_args["task_description"]
+        
         wandb.init(
             entity="thuaduc24042001-technical-university-of-munich",
             project="FastTD3 - new",
             name=run_name,
-            config=vars(args),
+            config=config,
             save_code=True,
             settings=wandb.Settings(
                 _disable_stats=True,  # disables CPU/memory/disk/GPU monitoring

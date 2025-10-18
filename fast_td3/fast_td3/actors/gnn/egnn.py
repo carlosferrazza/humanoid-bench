@@ -260,9 +260,9 @@ class EGNN(nn.Module):
 
     def forward(self, obs: torch.Tensor, xanchor: torch.Tensor) -> torch.Tensor:
         current_batch_size = obs.shape[0]
-        edges = self.skeleton.edges.to(obs.device)
+        edges = self.get_cached_edges(current_batch_size)
 
-        if self.mixed_types:
+        if self.has_mixed_node_types:
             return self.process_mixed_types(obs, xanchor, edges, current_batch_size)
         else:
             return self.process_single_type(obs, xanchor, edges, current_batch_size)

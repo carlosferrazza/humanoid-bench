@@ -69,7 +69,7 @@ class GraphBuilder:
 
     # obs = qpos + qvel
     # structure of obs: /home/duckoid/Downloads/humanoid-bench/fast_td3/src/humanoid-bench/humanoid_bench/tasks.py
-    # @torch.compile(dynamic=True)  # Disabled: not supported on Python 3.12+
+    @torch.compile(dynamic=True)
     def generate_input(self, obs: torch.tensor, xanchor: torch.tensor):
         """Generate input with root information as global context."""
         assert obs.shape[1] == 51, f"obs shape: {obs.shape}"
@@ -97,7 +97,7 @@ class GraphBuilder:
         return h, x, root_features
 
     # h = qpos concat qvel
-    # @torch.compile(dynamic=True)
+    @torch.compile(dynamic=True)
     def generate_input_for_mixed_type(self, obs: torch.tensor, xanchor: torch.tensor):
         if self.env_name in env_with_object:
             assert xanchor.shape[1] == 21, f"xanchor shape: {xanchor.shape}"

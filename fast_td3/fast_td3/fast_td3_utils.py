@@ -81,6 +81,7 @@ class SimpleReplayBuffer(nn.Module):
                 )
         self.ptr = 0
 
+    @torch.no_grad()
     def extend(
         self,
         tensor_dict: TensorDict,
@@ -115,6 +116,7 @@ class SimpleReplayBuffer(nn.Module):
                 self.next_critic_observations[:, ptr] = next_critic_observations
         self.ptr += 1
 
+    @torch.no_grad()
     def sample(self, batch_size: int):
         # we will sample n_env * batch_size transitions
 
@@ -146,6 +148,7 @@ class SimpleReplayBuffer(nn.Module):
             truncations = torch.gather(self.truncations, 1, indices).reshape(
                 self.n_env * batch_size
             )
+            effective_n_steps = torch.ones_like(dones)
             if self.asymmetric_obs:
                 if self.playground_mode:
                     # Gather privileged observations
@@ -179,12 +182,31 @@ class SimpleReplayBuffer(nn.Module):
                     ).reshape(self.n_env * batch_size, self.n_critic_obs)
         else:
             # Sample base indices
-            indices = torch.randint(
-                0,
-                min(self.buffer_size, self.ptr),
-                (self.n_env, batch_size),
-                device=self.device,
-            )
+            if self.ptr >= self.buffer_size:
+                # When the buffer is full, there is no protection against sampling across different episodes
+                # We avoid this by temporarily setting self.pos - 1 to truncated = True if not done
+                # https://github.com/DLR-RM/stable-baselines3/blob/b91050ca94f8bce7a0285c91f85da518d5a26223/stable_baselines3/common/buffers.py#L857-L860
+                # TODO (Younggyo): Change the reference when this SB3 branch is merged
+                current_pos = self.ptr % self.buffer_size
+                curr_truncations = self.truncations[:, current_pos - 1].clone()
+                self.truncations[:, current_pos - 1] = torch.logical_not(
+                    self.dones[:, current_pos - 1]
+                )
+                indices = torch.randint(
+                    0,
+                    self.buffer_size,
+                    (self.n_env, batch_size),
+                    device=self.device,
+                )
+            else:
+                # Buffer not full - ensure n-step sequence doesn't exceed valid data
+                max_start_idx = max(1, self.ptr - self.n_steps + 1)
+                indices = torch.randint(
+                    0,
+                    max_start_idx,
+                    (self.n_env, batch_size),
+                    device=self.device,
+                )
             obs_indices = indices.unsqueeze(-1).expand(-1, -1, self.n_obs)
             act_indices = indices.unsqueeze(-1).expand(-1, -1, self.n_act)
 
@@ -239,11 +261,15 @@ class SimpleReplayBuffer(nn.Module):
                 all_indices,
             )
 
-            # Create masks for rewards after first done
+            # Create masks for rewards *after* first done
             # This creates a cumulative product that zeroes out rewards after the first done
+            all_dones_shifted = torch.cat(
+                [torch.zeros_like(all_dones[:, :, :1]), all_dones[:, :, :-1]], dim=2
+            )  # First reward should not be masked
             done_masks = torch.cumprod(
-                1.0 - all_dones, dim=2
+                1.0 - all_dones_shifted, dim=2
             )  # [n_env, batch_size, n_step]
+            effective_n_steps = done_masks.sum(2)
 
             # Create discount factors
             discounts = torch.pow(
@@ -339,6 +365,7 @@ class SimpleReplayBuffer(nn.Module):
             rewards = n_step_rewards.reshape(self.n_env * batch_size)
             dones = final_dones.reshape(self.n_env * batch_size)
             truncations = final_truncations.reshape(self.n_env * batch_size)
+            effective_n_steps = effective_n_steps.reshape(self.n_env * batch_size)
             next_observations = final_next_observations.reshape(
                 self.n_env * batch_size, self.n_obs
             )
@@ -352,6 +379,7 @@ class SimpleReplayBuffer(nn.Module):
                     "dones": dones,
                     "truncations": truncations,
                     "observations": next_observations,
+                    "effective_n_steps": effective_n_steps,
                 },
             },
             batch_size=self.n_env * batch_size,
@@ -359,6 +387,10 @@ class SimpleReplayBuffer(nn.Module):
         if self.asymmetric_obs:
             out["critic_observations"] = critic_observations
             out["next"]["critic_observations"] = next_critic_observations
+
+        if self.n_steps > 1 and self.ptr >= self.buffer_size:
+            # Roll back the truncation flags introduced for safe sampling
+            self.truncations[:, current_pos - 1] = curr_truncations
         return out
 
 
@@ -391,6 +423,7 @@ class EmpiricalNormalization(nn.Module):
     def std(self):
         return self._std.squeeze(0).clone()
 
+    @torch.no_grad()
     def forward(self, x: torch.Tensor, center: bool = True) -> torch.Tensor:
         if x.shape[1:] != self._mean.shape[1:]:
             raise ValueError(
@@ -406,7 +439,6 @@ class EmpiricalNormalization(nn.Module):
 
     @torch.jit.unused
     def update(self, x):
-        """Learn input values using Welford's online algorithm"""
         if self.until is not None and self.count >= self.until:
             return
 
@@ -420,23 +452,19 @@ class EmpiricalNormalization(nn.Module):
         delta = batch_mean - self._mean
         self._mean += (batch_size / new_count) * delta
 
-        # Update variance using Welford's parallel algorithm
-        if self.count > 0:  # Ensure we're not dividing by zero
-            # Compute batch variance
-            batch_var = torch.mean((x - batch_mean) ** 2, dim=0, keepdim=True)
+        # Compute batch variance
+        batch_var = torch.mean((x - batch_mean) ** 2, dim=0, keepdim=True)
+        delta2 = batch_mean - self._mean  # uses updated mean
 
-            # Combine variances using parallel algorithm
-            delta2 = batch_mean - self._mean
-            m_a = self._var * self.count
-            m_b = batch_var * batch_size
-            M2 = m_a + m_b + (delta2**2) * (self.count * batch_size / new_count)
-            self._var = M2 / new_count
-        else:
-            # For first batch, just use batch variance
-            self._var = torch.mean((x - self._mean) ** 2, dim=0, keepdim=True)
+        # Parallel variance update (works even when previous count == 0)
+        m_a = self._var * self.count  # previous aggregated M2
+        m_b = batch_var * batch_size
+        M2 = m_a + m_b + delta2.pow(2) * (self.count * batch_size / new_count)
+        self._var.copy_(M2 / new_count)
 
-        self._std = torch.sqrt(self._var)
-        self.count = new_count
+        # Update std and count in-place to avoid expensive __setattr__
+        self._std.copy_(self._var.sqrt())
+        self.count.copy_(new_count)
 
     @torch.jit.unused
     def inverse(self, y):
@@ -580,6 +608,7 @@ class SimpleReplayBufferGNN(nn.Module):
                 )
         self.ptr = 0
 
+    @torch.no_grad()
     def extend(
         self,
         tensor_dict: TensorDict,
@@ -618,6 +647,7 @@ class SimpleReplayBufferGNN(nn.Module):
                 self.next_critic_observations[:, ptr] = next_critic_observations
         self.ptr += 1
 
+    @torch.no_grad()
     def sample(self, batch_size: int):
         # we will sample n_env * batch_size transitions
 
@@ -651,6 +681,7 @@ class SimpleReplayBufferGNN(nn.Module):
             truncations = torch.gather(self.truncations, 1, indices).reshape(
                 self.n_env * batch_size
             )
+            effective_n_steps = torch.ones_like(dones)
             if self.asymmetric_obs:
                 if self.playground_mode:
                     # Gather privileged observations
@@ -684,12 +715,31 @@ class SimpleReplayBufferGNN(nn.Module):
                     ).reshape(self.n_env * batch_size, self.n_critic_obs)
         else:
             # Sample base indices
-            indices = torch.randint(
-                0,
-                min(self.buffer_size, self.ptr),
-                (self.n_env, batch_size),
-                device=self.device,
-            )
+            if self.ptr >= self.buffer_size:
+                # When the buffer is full, there is no protection against sampling across different episodes
+                # We avoid this by temporarily setting self.pos - 1 to truncated = True if not done
+                # https://github.com/DLR-RM/stable-baselines3/blob/b91050ca94f8bce7a0285c91f85da518d5a26223/stable_baselines3/common/buffers.py#L857-L860
+                # TODO (Younggyo): Change the reference when this SB3 branch is merged
+                current_pos = self.ptr % self.buffer_size
+                curr_truncations = self.truncations[:, current_pos - 1].clone()
+                self.truncations[:, current_pos - 1] = torch.logical_not(
+                    self.dones[:, current_pos - 1]
+                )
+                indices = torch.randint(
+                    0,
+                    self.buffer_size,
+                    (self.n_env, batch_size),
+                    device=self.device,
+                )
+            else:
+                # Buffer not full - ensure n-step sequence doesn't exceed valid data
+                max_start_idx = max(1, self.ptr - self.n_steps + 1)
+                indices = torch.randint(
+                    0,
+                    max_start_idx,
+                    (self.n_env, batch_size),
+                    device=self.device,
+                )
             obs_indices = indices.unsqueeze(-1).expand(-1, -1, self.n_obs)
             act_indices = indices.unsqueeze(-1).expand(-1, -1, self.n_act)
 
@@ -747,11 +797,15 @@ class SimpleReplayBufferGNN(nn.Module):
                 all_indices,
             )
 
-            # Create masks for rewards after first done
+            # Create masks for rewards *after* first done
             # This creates a cumulative product that zeroes out rewards after the first done
+            all_dones_shifted = torch.cat(
+                [torch.zeros_like(all_dones[:, :, :1]), all_dones[:, :, :-1]], dim=2
+            )  # First reward should not be masked
             done_masks = torch.cumprod(
-                1.0 - all_dones, dim=2
+                1.0 - all_dones_shifted, dim=2
             )  # [n_env, batch_size, n_step]
+            effective_n_steps = done_masks.sum(2)
 
             # Create discount factors
             discounts = torch.pow(
@@ -847,6 +901,7 @@ class SimpleReplayBufferGNN(nn.Module):
             rewards = n_step_rewards.reshape(self.n_env * batch_size)
             dones = final_dones.reshape(self.n_env * batch_size)
             truncations = final_truncations.reshape(self.n_env * batch_size)
+            effective_n_steps = effective_n_steps.reshape(self.n_env * batch_size)
             next_observations = final_next_observations.reshape(
                 self.n_env * batch_size, self.n_obs
             )
@@ -863,6 +918,7 @@ class SimpleReplayBufferGNN(nn.Module):
                     "truncations": truncations,
                     "observations": next_observations,
                     "xposs": next_xposs,
+                    "effective_n_steps": effective_n_steps,
                 },
             },
             batch_size=self.n_env * batch_size,
@@ -870,5 +926,9 @@ class SimpleReplayBufferGNN(nn.Module):
         if self.asymmetric_obs:
             out["critic_observations"] = critic_observations
             out["next"]["critic_observations"] = next_critic_observations
+
+        if self.n_steps > 1 and self.ptr >= self.buffer_size:
+            # Roll back the truncation flags introduced for safe sampling
+            self.truncations[:, current_pos - 1] = curr_truncations
         return out
 

@@ -46,17 +46,15 @@ class DistributionalQNetwork(nn.Module):
         delta_z = (self.v_max - self.v_min) / (self.num_atoms - 1)
         batch_size = rewards.shape[0]
 
-        target_z = (
-            rewards.unsqueeze(1)
-            + bootstrap.unsqueeze(1) * discount * q_support
-        )
+        target_z = rewards.unsqueeze(1) + bootstrap.unsqueeze(1) * discount * q_support
         target_z = target_z.clamp(self.v_min, self.v_max)
         b = (target_z - self.v_min) / delta_z
         l = torch.floor(b).long()
         u = torch.ceil(b).long()
 
-        l_mask = torch.logical_and((u > 0), (l == u))
-        u_mask = torch.logical_and((l < (self.num_atoms - 1)), (l == u))
+        is_int = l == u
+        l_mask = is_int & (l > 0)
+        u_mask = is_int & (l == 0)
 
         l = torch.where(l_mask, l - 1, l)
         u = torch.where(u_mask, u + 1, u)
@@ -114,6 +112,7 @@ class Critic(nn.Module):
         self.register_buffer(
             "q_support", torch.linspace(v_min, v_max, num_atoms, device=device)
         )
+        self.device = device
 
     def forward(self, obs: torch.Tensor, actions: torch.Tensor) -> torch.Tensor:
         return self.qnet1(obs, actions), self.qnet2(obs, actions)
@@ -150,7 +149,3 @@ class Critic(nn.Module):
     def get_value(self, probs: torch.Tensor) -> torch.Tensor:
         """Calculate value from logits using support"""
         return torch.sum(probs * self.q_support, dim=1)
-
-
-
-

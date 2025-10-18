@@ -83,13 +83,13 @@ class HumanoidBenchEnv:
 
     def reset(self):
         """Reset the environment."""
-        observations , xpos = self.envs.reset()
+        observations , xanchor = self.envs.reset()
         observations = torch.from_numpy(observations).to(
             device=self.sim_device, dtype=torch.float
         )
-        xpos = torch.from_numpy(xpos).to(device=self.sim_device, dtype=torch.float)
+        xanchor = torch.from_numpy(xanchor).to(device=self.sim_device, dtype=torch.float)
 
-        return observations, xpos
+        return observations, xanchor
 
     def render(self):
         assert (
@@ -101,7 +101,7 @@ class HumanoidBenchEnv:
         assert isinstance(actions, torch.Tensor)
         actions = actions.cpu().numpy()
 
-        observations, rewards, dones, raw_infos, xpos = self.envs.step(actions)
+        observations, rewards, dones, raw_infos, xanchor = self.envs.step(actions)
 
         # This will be used for getting 'true' next observations
         infos = dict()
@@ -117,7 +117,7 @@ class HumanoidBenchEnv:
         observations = torch.from_numpy(observations).to(
             device=self.sim_device, dtype=torch.float
         )
-        xpos = torch.from_numpy(xpos).to(device=self.sim_device, dtype=torch.float)
+        xanchor = torch.from_numpy(xanchor).to(device=self.sim_device, dtype=torch.float)
         rewards = torch.from_numpy(rewards).to(
             device=self.sim_device, dtype=torch.float
         )
@@ -128,4 +128,4 @@ class HumanoidBenchEnv:
         ).to(device=self.sim_device, dtype=torch.float)
         infos["time_outs"] = truncateds
 
-        return observations, rewards, dones, infos, xpos
+        return observations, rewards, dones, infos, xanchor

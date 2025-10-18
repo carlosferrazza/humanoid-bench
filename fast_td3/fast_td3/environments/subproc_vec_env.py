@@ -17,7 +17,6 @@ from stable_baselines3.common.vec_env.base_vec_env import (
     VecEnvStepReturn,
 )
 from stable_baselines3.common.vec_env.patch_gym import _patch_env
-from fast_td3.environments.physics_data import PhysicsData
 
 
 # Set environment variable to disable fork safety on macOS

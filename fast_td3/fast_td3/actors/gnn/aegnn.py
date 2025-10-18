@@ -283,7 +283,7 @@ class AngleEGNN(nn.Module):
 
         return h
 
-    def build_batched_angle_input(self, obs: torch.tensor, xpos: torch.tensor):
+    def build_batched_angle_input(self, obs: torch.tensor, xanchor: torch.tensor):
         """
         Build input for AngleEGNN from observations and joint angles
 
@@ -291,7 +291,7 @@ class AngleEGNN(nn.Module):
             obs: Observation tensor (B, obs_dim)
             joint_angles: Joint angle tensor (B, N*k) where N is num_nodes, k is joint_dim
         """
-        del xpos
+        del xanchor
         batch_size = obs.shape[0]
         if batch_size == self.batch_size:
             edge_index = self.edge_index

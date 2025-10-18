@@ -393,7 +393,7 @@ class Ponita(nn.Module):
             x = interaction_layer(x, kernel_basis, fiber_kernel_basis, edge_index)
         return x
 
-    def build_batched_ponita_input(self, obs: torch.Tensor, xpos: torch.Tensor):
+    def build_batched_ponita_input(self, obs: torch.Tensor, xanchor: torch.Tensor):
         batch_size = obs.shape[0]
 
         if batch_size == self.batch_size:
@@ -423,7 +423,7 @@ class Ponita(nn.Module):
                     self._batch_cache[batch_size] = (edge_index, node_attr, batch)
 
         # Flatten node positions (B*N, 3) - already efficient
-        x = xpos[:, 1:].reshape(-1, 3)
+        x = xanchor[:, 1:].reshape(-1, 3)
 
         if self.robot == "h1":
             h = torch.stack(

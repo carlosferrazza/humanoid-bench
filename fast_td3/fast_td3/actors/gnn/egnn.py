@@ -258,25 +258,25 @@ class EGNN(nn.Module):
         # Initialize edge cache - will be populated dynamically as new batch sizes are encountered
         self._edges_cache = {}
 
-    def forward(self, obs: torch.Tensor, xpos: torch.Tensor) -> torch.Tensor:
+    def forward(self, obs: torch.Tensor, xanchor: torch.Tensor) -> torch.Tensor:
         current_batch_size = obs.shape[0]
         edges = self.get_cached_edges(current_batch_size)
 
         if self.has_mixed_node_types:
-            return self.process_mixed_types(obs, xpos, edges, current_batch_size)
+            return self.process_mixed_types(obs, xanchor, edges, current_batch_size)
         else:
-            return self.process_single_type(obs, xpos, edges, current_batch_size)
+            return self.process_single_type(obs, xanchor, edges, current_batch_size)
 
     def process_mixed_types(
         self,
         obs: torch.Tensor,
-        xpos: torch.Tensor,
+        xanchor: torch.Tensor,
         edges: torch.Tensor,
         current_batch_size: int,
     ) -> torch.Tensor:
         """Process environments with objects using separate clusters for joints and objects."""
         h_joint, h_object, x_joint, _ = (
-            self.graph_builder.generate_input_for_mixed_type(obs, xpos)
+            self.graph_builder.generate_input_for_mixed_type(obs, xanchor)
         )
 
         h_joints = self.joint_embedding_in(h_joint)
@@ -300,12 +300,12 @@ class EGNN(nn.Module):
     def process_single_type(
         self,
         obs: torch.Tensor,
-        xpos: torch.Tensor,
+        xanchor: torch.Tensor,
         edges: torch.Tensor,
         current_batch_size: int,
     ) -> torch.Tensor:
-        """Process environments without objects using joints and root context."""
-        h_joints, x_joint, h_root = self.graph_builder.generate_input(obs, xpos)
+        """Process standard environments with only joint nodes."""
+        h_joints, x_joint, h_root = self.graph_builder.generate_input(obs, xanchor)
 
         h_joints = self.joint_embedding_in(h_joints)
         for layer in self.layers:

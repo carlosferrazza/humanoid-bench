@@ -341,7 +341,7 @@ class EGNN_FiLM(nn.Module):
             self._edge_cache[current_batch_size] = (edges, edge_attr, node_attr)
         return self._edge_cache[current_batch_size]
     
-    def generate_input_film(self, obs: torch.tensor, xpos: torch.tensor):
+    def generate_input_film(self, obs: torch.tensor, xanchor: torch.tensor):
         """
         Generate input for FiLM-conditioned EGNN.
         
@@ -351,7 +351,7 @@ class EGNN_FiLM(nn.Module):
             context: Root features [batch*19, 13] - broadcasted to all joints
         """
         assert obs.shape[1] == 51, f"obs shape: {obs.shape}"
-        assert xpos.shape[1] == 20, f"xpos shape: {xpos.shape}"
+        assert xanchor.shape[1] == 20, f"xanchor shape: {xanchor.shape}"
 
         # Extract root features (13 values) - these become context
         root_features = torch.cat([
@@ -369,11 +369,11 @@ class EGNN_FiLM(nn.Module):
         context = root_features.repeat_interleave(19, dim=0)  # [batch*19, 13]
 
         # Positions remain relative to root
-        x = (xpos[:, 1:] - xpos[:, [0]]).reshape(-1, 3)  # [batch*19, 3]
+        x = (xanchor[:, 1:] - xanchor[:, [0]]).reshape(-1, 3)  # [batch*19, 3]
 
         return h, x, context
     
-    def forward(self, obs: torch.Tensor, xpos: torch.Tensor) -> torch.Tensor:
+    def forward(self, obs: torch.Tensor, xanchor: torch.Tensor) -> torch.Tensor:
         """
         Forward pass with FiLM conditioning.
         """
@@ -381,7 +381,7 @@ class EGNN_FiLM(nn.Module):
         edges, _, _ = self._get_cached_edges(current_batch_size)
         
         # Generate input: joint features and root context
-        h, x, context = self.generate_input_film(obs, xpos)
+        h, x, context = self.generate_input_film(obs, xanchor)
         
         # Encode context
         context = self.context_encoder(context)  # [batch*19, 13]
@@ -430,7 +430,7 @@ if __name__ == "__main__":
     )
     
     obs = torch.randn(4, 51)
-    xpos = torch.randn(4, 20, 3)
-    output = model(obs, xpos)
+    xanchor = torch.randn(4, 20, 3)
+    output = model(obs, xanchor)
     print(f"Output shape: {output.shape}")
     print("✓ FiLM EGNN test passed!")

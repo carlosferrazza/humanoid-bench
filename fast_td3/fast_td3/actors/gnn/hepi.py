@@ -166,7 +166,7 @@ class HEPi(BaseGNN):
     def forward(
         self,
         obs,
-        xpos,
+        xanchor,
         **kwargs,
     ) -> torch.Tensor:
         batch_size = obs.shape[0]
@@ -180,7 +180,7 @@ class HEPi(BaseGNN):
             edge_index = self.edge_index[:, : batch_size * self.num_edges].clone()
             edge_attr = self.edge_attr[: batch_size * self.num_edges].clone()
 
-        x = xpos[:, 1:].reshape(-1, 3)  # (B*N, 3)
+        x = xanchor[:, 1:].reshape(-1, 3)  # (B*N, 3)
 
         if self.robot == "h1":
             h = torch.stack(

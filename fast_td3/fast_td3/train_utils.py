@@ -226,18 +226,25 @@ def create_actor(
         ValueError: If actor_type is not supported
     """
     from fast_td3.actors import (
-        ActorEGNN,
         Actor,
-        ActorMPNN,
-        ActorHEPI,
-        ActorAEGNN,
-        ActorPONITA,
-        ActorHEGNN,
+        ActorEGNN,
+        ActorEGNN2,
         ActorEGNN_FiLM,
     )
     
     if actor_type == "egnn":
         return ActorEGNN(
+            n_obs=n_obs,
+            n_act=n_act,
+            num_envs=num_envs,
+            batch_size=batch_size,
+            device=device,
+            init_scale=init_scale,
+            env_name=env_name,
+            **model_kwargs,
+        )
+    elif actor_type == "egnn2":
+        return ActorEGNN2(
             n_obs=n_obs,
             n_act=n_act,
             num_envs=num_envs,
@@ -255,55 +262,6 @@ def create_actor(
             device=device,
             init_scale=init_scale,
             hidden_dim=actor_hidden_dim,
-        )
-    elif actor_type == "mpnn":
-        return ActorMPNN(
-            n_obs=n_obs,
-            n_act=n_act,
-            num_envs=num_envs,
-            batch_size=batch_size,
-            device=device,
-            **model_kwargs,
-        )
-    elif actor_type == "hepi":
-        return ActorHEPI(
-            n_obs=n_obs,
-            n_act=n_act,
-            num_envs=num_envs,
-            batch_size=batch_size,
-            device=device,
-            **model_kwargs,
-        )
-    elif actor_type == "aegnn":
-        return ActorAEGNN(
-            n_obs=n_obs,
-            n_act=n_act,
-            num_envs=num_envs,
-            batch_size=batch_size,
-            device=device,
-            init_scale=init_scale,
-            **model_kwargs,
-        )
-    elif actor_type == "ponita":
-        return ActorPONITA(
-            n_obs=n_obs,
-            n_act=n_act,
-            num_envs=num_envs,
-            batch_size=batch_size,
-            device=device,
-            robot="h1",
-            **model_kwargs,
-        )
-    elif actor_type == "hegnn":
-        return ActorHEGNN(
-            n_obs=n_obs,
-            n_act=n_act,
-            num_envs=num_envs,
-            batch_size=batch_size,
-            device=device,
-            init_scale=init_scale,
-            env_name=env_name,
-            **model_kwargs,
         )
     elif actor_type == "egnn_film":
         return ActorEGNN_FiLM(

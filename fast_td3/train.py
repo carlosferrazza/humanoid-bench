@@ -50,7 +50,7 @@ def main():
         type=str,
         default="egnn",
         help="The kind of actor to use.",
-        choices=["egnn", "mlp", "mpnn", "hepi", "aegnn", "ponita", "hegnn", "egnn_film"],
+        choices=["mlp", "egnn", "egnn2", "egnn_film"],
     )
     parser.add_argument("--env_name", type=str, default="h1-stand-v0")
     parser.add_argument(
@@ -122,9 +122,9 @@ def main():
 
     use_wandb = terminal_args["wandb"]
 
+    uid = uuid.uuid4().hex[:6]  # 6-char unique ID
+    run_name = f"{terminal_args['actor']}_{args.env_name}_{args.num_envs}envs_{args.total_timesteps}steps_{uid}"
     if use_wandb:
-        uid = uuid.uuid4().hex[:6]  # 6-char unique ID
-        run_name = f"{terminal_args['actor']}_{args.env_name}_{args.num_envs}envs_{args.total_timesteps}steps_{uid}"
         
         config = vars(args)
         config["actor"] = terminal_args["actor"]
@@ -219,7 +219,6 @@ def main():
     normalize_critic_obs = critic_obs_normalizer.forward
     normalize_xanchor = xanchor_normalizer.forward
 
-    # Create the main actor and actor detach (twin actor)
     actor = create_actor(
         actor_type=terminal_args["actor"],
         n_obs=n_obs,
@@ -245,8 +244,8 @@ def main():
         actor_hidden_dim=args.actor_hidden_dim,
     )
 
-    # For actors with LazyLinear layers (PONITA, EGNN with mixed types), we need to initialize them before copying parameters
-    if terminal_args["actor"] in ["ponita", "egnn"]:
+    # For actors with LazyLinear layers (EGNN with mixed types), we need to initialize them before copying parameters
+    if terminal_args["actor"] in ["egnn", "egnn2", "egnn_film"]:
         init_obs, init_xanchor = envs.reset()
         with torch.no_grad():
             _ = actor(init_obs.to(device), init_xanchor.to(device))

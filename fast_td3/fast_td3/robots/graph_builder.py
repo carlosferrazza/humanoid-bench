@@ -103,15 +103,6 @@ class GraphBuilder:
             assert xanchor.shape[1] == 21, f"xanchor shape: {xanchor.shape}"
             x_joint = (xanchor[:, 1:20] - xanchor[:, [0]]).reshape(-1, 3)
             x_object = (xanchor[:, 20:] - xanchor[:, [0]]).reshape(-1, 3)
-
-            # # square distance from each joint to object
-            # distant_joint_to_object = (
-            #     (xanchor[:, 1:20] - xanchor[:, [20]])
-            #     .reshape(-1, 3)
-            #     .pow(2)
-            #     .sum(dim=-1, keepdim=True)
-            # )
-
             h_node = torch.cat(
                 [
                     obs[:, 7:26].reshape(-1, 1),
@@ -121,9 +112,42 @@ class GraphBuilder:
             )
 
             # position, quarternion, linear velocity, angular velocity of pelvis and object
-            h_object = torch.cat([obs[:, 0:7], obs[:, 26:39], obs[:, 58:64]], dim=1)
+            h_object = torch.cat([obs[:, 3:7], obs[:, 26:39], obs[:, 58:64]], dim=1)
 
             return h_node, h_object, x_joint, x_object
+
+    
+    @torch.compile(dynamic=True)
+    def generate_input2(self, obs: torch.tensor, xpos: torch.tensor):
+        """Generate input with root information as global context."""
+        assert obs.shape[1] == 51, f"obs shape: {obs.shape}"
+        assert xpos.shape[1] == 20, f"xpos shape: {xpos.shape}"
+
+        # Extract root features (13 values)
+        h_root = torch.cat(
+            [obs[:, 3:7], obs[:, 26:32]],  # quat (4) # root vel (6)
+            dim=1,
+        ) * 0.2 # [batch, 13]
+
+        # Extract joint features
+        joint_pos = obs[:, 7:26].reshape(-1, 1)  # [batch*19, 1]
+        joint_vel = obs[:, 32:].reshape(-1, 1)  # [batch*19, 1]
+
+        # Concatenate: each joint gets [pos, vel]
+        h = torch.cat(
+            [joint_pos, joint_vel],
+            dim=1,
+        )  # [batch*19, 2]
+
+        # Positions remain relative to root (unchanged)
+        x = (xpos[:, 1:] - xpos[:, [0]]).reshape(-1, 3)  # [batch*19, 3]
+        
+        # all values to 0
+        x_root = xpos[:, 0].reshape(-1, 3)  # [batch, 3]
+        x_root = torch.zeros_like(x_root)  # [batch, 3]
+        
+        return h, x, h_root, x_root
+
 
     def visualize_graph(
         self, with_object: bool | None = None, save_path: str = "robot_graph.png"

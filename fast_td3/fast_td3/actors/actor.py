@@ -41,7 +41,8 @@ class Actor(nn.Module):
         self.n_envs = num_envs
 
     def forward(self, obs: torch.Tensor, xanchor: torch.Tensor = None) -> torch.Tensor:
-
+        del xanchor
+        
         x = obs
         x = self.net(x)
         action = self.fc_mu(x)
@@ -50,6 +51,8 @@ class Actor(nn.Module):
     def explore(
         self, obs: torch.Tensor, xanchor: torch.Tensor = None, dones: torch.Tensor = None, deterministic: bool = False
     ) -> torch.Tensor:
+        del xanchor
+
         # If dones is provided, resample noise for environments that are done
         if dones is not None and dones.sum() > 0:
             # Generate new noise scales for done environments (one per environment)

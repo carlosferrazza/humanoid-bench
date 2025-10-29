@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from fast_td3.actors.gnn.type_aware_egnn import TypeAwareEGNN
+from fast_td3.actors.gnn.egnn2 import EGNN
 
-class ActorHEGNN(nn.Module):
+class ActorEGNN2(nn.Module):
     def __init__(
         self,
         n_obs: int,
@@ -20,13 +20,11 @@ class ActorHEGNN(nn.Module):
         robot: str = "h1",
         std_min: float = 0.05,
         std_max: float = 0.8,
-        n_node_feat: int = 2,
         n_edge_feat: int = 0,
         attention: bool = False,
         coords_agg: str = "mean",
         normalize: bool = False,
         tanh: bool = False,
-        object_node_nf: int | None = None,
     ):
         super().__init__()
         self.n_act = n_act
@@ -42,9 +40,8 @@ class ActorHEGNN(nn.Module):
             case _:
                 raise ValueError(f"Unknown activation function: {act_fn}")
 
-        # HEGNN for message passing
-        self.hegnn = TypeAwareEGNN(
-            in_node_nf=n_node_feat,
+        # EGNN for message passing
+        self.egnn = EGNN(
             hidden_nf=hidden_dim,
             out_node_nf=1,
             in_edge_nf=n_edge_feat,
@@ -58,7 +55,6 @@ class ActorHEGNN(nn.Module):
             normalize=normalize,
             tanh=tanh,
             env_name=env_name,
-            object_node_nf=object_node_nf
         )
 
         # Initialize noise parameters
@@ -70,7 +66,7 @@ class ActorHEGNN(nn.Module):
         self.register_buffer("std_max", torch.as_tensor(std_max, device=device))
 
     def forward(self, obs, xanchor) -> torch.Tensor:
-        result = self.hegnn(obs, xanchor)
+        result = self.egnn(obs, xanchor)
 
         return result
 

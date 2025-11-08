@@ -1,5 +1,0 @@
---editable jaxrl_m
-ml_collections==0.1.1
-flax==0.8.5
-distrax==0.1.5
-tf_keras==2.16.0

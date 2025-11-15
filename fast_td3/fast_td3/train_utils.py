@@ -208,7 +208,7 @@ def create_actor(
     Helper function to create an actor based on the specified type.
 
     Args:
-        actor_type (str): Type of actor ("egnn", "mlp", "mpnn", "hepi")
+        actor_type (str): Type of actor ("egnn", "mlp")
         n_obs (int): Number of observations
         n_act (int): Number of actions
         num_envs (int): Number of environments

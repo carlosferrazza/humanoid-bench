@@ -121,10 +121,9 @@ def main():
     print(f"Training with args: {terminal_args}")
 
     use_wandb = terminal_args["wandb"]
-
+    uid = uuid.uuid4().hex[:6]  # 6-char unique ID
+    run_name = f"{terminal_args['actor']}_{args.env_name}_{args.num_envs}envs_{args.total_timesteps}steps_{uid}"
     if use_wandb:
-        uid = uuid.uuid4().hex[:6]  # 6-char unique ID
-        run_name = f"{terminal_args['actor']}_{args.env_name}_{args.num_envs}envs_{args.total_timesteps}steps_{uid}"
         
         config = vars(args)
         config["actor"] = terminal_args["actor"]
@@ -142,9 +141,9 @@ def main():
             ),
         )
         
-        wandb.save("fast_td3/actors/gnn/egnn.py")
-        wandb.save("fast_td3/robots/H1.py")
-        wandb.save("fast_td3/robots/graph_builder.py")
+        wandb.save("fast_td3/fast_td3/actors/gnn/egnn.py")
+        wandb.save("fast_td3/fast_td3/robots/H1.py")
+        wandb.save("fast_td3/fast_td3/robots/graph_builder.py")
 
 
 

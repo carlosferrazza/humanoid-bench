@@ -233,7 +233,8 @@ class EGNN(nn.Module):
             ) for _ in range(n_layers)
         ])
         self.graph_builder = GraphBuilder(env_name, batch_size, device, robot)
-        # Ensure all parameters and submodules are on the requested device
+        self.num_joints = len(self.graph_builder.robot.joint_connections)
+        self.num_nodes = self.num_joints
         
         self.joint_embedding_in = nn.Sequential(
             nn.Linear(in_node_nf, self.hidden_nf),

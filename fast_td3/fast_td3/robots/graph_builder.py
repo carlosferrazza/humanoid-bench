@@ -67,50 +67,33 @@ class GraphBuilder:
         self.batch_size = batch_size
         self.num_edges = self.robot.joint_connections.__len__()
 
-    # obs = qpos + qvel
-    # structure of obs: /home/duckoid/Downloads/humanoid-bench/fast_td3/src/humanoid-bench/humanoid_bench/tasks.py
     @torch.compile(dynamic=True)
     def generate_input(self, obs: torch.tensor, xanchor: torch.tensor):
         """Generate input with root information as global context."""
         assert obs.shape[1] == 51, f"obs shape: {obs.shape}"
         assert xanchor.shape[1] == 20, f"xanchor shape: {xanchor.shape}"
 
-        # Extract root features (13 values)
-        root_features = torch.cat(
-            [obs[:, 0:7], obs[:, 26:32]],  # root pos (3) + quat (4) = 7  # root vel (6)
-            dim=1,
-        )  # [batch, 13]
-
         # Extract joint features
         joint_pos = obs[:, 7:26].reshape(-1, 1)  # [batch*19, 1]
         joint_vel = obs[:, 32:].reshape(-1, 1)  # [batch*19, 1]
-
-        # Concatenate: each joint gets [pos, vel, root_context]
         h = torch.cat(
-            [joint_pos, joint_vel],  # 1 value  # 1 value  # 13 values
+            [joint_pos, joint_vel],
             dim=1,
-        )  # [batch*19, 2]
-
-        # Positions remain relative to root (unchanged)
+        )
         x = (xanchor[:, 1:] - xanchor[:, [0]]).reshape(-1, 3)  # [batch*19, 3]
+        
+        # Extract root/object features
+        h_object = obs[:, 26:32]
+        x_object = xanchor[:, [0]].reshape(-1, 3)  # [batch, 3]yY
 
-        return h, x, root_features
+        return h, x, h_object, x_object
 
-    # h = qpos concat qvel
     @torch.compile(dynamic=True)
     def generate_input_for_mixed_type(self, obs: torch.tensor, xanchor: torch.tensor):
         if self.env_name in env_with_object:
             assert xanchor.shape[1] == 21, f"xanchor shape: {xanchor.shape}"
             x_joint = (xanchor[:, 1:20] - xanchor[:, [0]]).reshape(-1, 3)
             x_object = (xanchor[:, 20:] - xanchor[:, [0]]).reshape(-1, 3)
-
-            # # square distance from each joint to object
-            # distant_joint_to_object = (
-            #     (xanchor[:, 1:20] - xanchor[:, [20]])
-            #     .reshape(-1, 3)
-            #     .pow(2)
-            #     .sum(dim=-1, keepdim=True)
-            # )
 
             h_node = torch.cat(
                 [

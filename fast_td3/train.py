@@ -32,7 +32,7 @@ from fast_td3.fast_td3_utils import (
 )
 from fast_td3 import Critic
 
-from fast_td3.train_utils import print_gradient_stats, create_actor, collect_gradient_stats
+from fast_td3.train_utils import create_actor, collect_gradient_stats
 from fast_td3.hyperparams import HumanoidBenchArgs
 import argparse
 from fast_td3.environments.humanoid_bench_env import HumanoidBenchEnv
@@ -193,23 +193,12 @@ def main():
         n_critic_obs = n_obs
     action_low, action_high = -1.0, 1.0
 
-    if terminal_args["env_name"] in [
-        "h1-push-v0",
-        "h1-basketball-v0",
-        "h1-package-v0",
-        "h1-sit_hard-v0",
-        "h1-balance_simple-v0",
-    ]: 
-        n_xanchor = 21
-    else:
-        n_xanchor = 20
-
     if args.obs_normalization:
         obs_normalizer = EmpiricalNormalization(shape=n_obs, device=device)
         critic_obs_normalizer = EmpiricalNormalization(
             shape=n_critic_obs, device=device
         )
-        xanchor_normalizer = EmpiricalNormalization(shape=(n_xanchor, 3), device=device)
+        xanchor_normalizer = nn.Identity()
     else:
         obs_normalizer = nn.Identity()
         critic_obs_normalizer = nn.Identity()
@@ -244,12 +233,6 @@ def main():
         model_kwargs=model_kwargs,
         actor_hidden_dim=args.actor_hidden_dim,
     )
-
-    # For actors with LazyLinear layers (PONITA, EGNN with mixed types), we need to initialize them before copying parameters
-    if terminal_args["actor"] in ["ponita", "egnn"]:
-        init_obs, init_xanchor = envs.reset()
-        with torch.no_grad():
-            _ = actor(init_obs.to(device), init_xanchor.to(device))
 
     print(f"Actor num of parameters: {sum(p.numel() for p in actor.parameters())}")
     for name in actor.named_parameters():
@@ -442,11 +425,6 @@ def main():
             xanchor = data["xanchors"]
             next_xanchor = data["next"]["xanchors"]
 
-            # check_tensor("observations", observations)
-            # check_tensor("next_observations", next_observations)
-            # check_tensor("xanchor", xanchor)
-            # check_tensor("next_xanchor", next_xanchor)
-
             if envs.asymmetric_obs:
                 critic_observations = data["critic_observations"]
                 next_critic_observations = data["next"]["critic_observations"]
@@ -458,11 +436,6 @@ def main():
             rewards = data["next"]["rewards"]
             dones = data["next"]["dones"].bool()
             truncations = data["next"]["truncations"].bool()
-
-            # check_tensor("critic_observations", critic_observations)
-            # check_tensor("next_critic_observations", next_critic_observations)
-            # check_tensor("actions", actions)
-            # check_tensor("rewards", rewards)
 
             # Determine bootstrap mask for value function targets
             if args.disable_bootstrap:
@@ -477,9 +450,6 @@ def main():
                 -noise_clip, noise_clip
             )
 
-            # Generate target actions using the main actor (not actor_detach) with added noise
-            # print(f"Next observations shape: {next_observations.shape}")
-            # print(f"Next xanchor shape: {next_xanchor.shape}")
             next_state_actions = (
                 actor(next_observations, next_xanchor) + clipped_noise
             ).clamp(action_low, action_high)
@@ -497,14 +467,8 @@ def main():
                     )
                 )
 
-                # check_tensor("qf1_next_target_projected", qf1_next_target_projected)
-                # check_tensor("qf2_next_target_projected", qf2_next_target_projected)
-
                 qf1_next_target_value = qnet_target.get_value(qf1_next_target_projected)
                 qf2_next_target_value = qnet_target.get_value(qf2_next_target_projected)
-
-                # check_tensor("qf1_next_target_value", qf1_next_target_value)
-                # check_tensor("qf2_next_target_value", qf2_next_target_value)
 
                 # CLIPPED DOUBLE Q-LEARNING: Use minimum Q-value to reduce overestimation
                 if args.use_cdq:
@@ -523,13 +487,8 @@ def main():
                         qf2_next_target_projected,
                     )
 
-                # check_tensor("qf1_next_target_dist", qf1_next_target_dist)
-                # check_tensor("qf2_next_target_dist", qf2_next_target_dist)
-
             # Compute current Q-values for the actual state-action pairs
             qf1, qf2 = qnet(critic_observations, actions)
-            # check_tensor("qf1", qf1)
-            # check_tensor("qf2", qf2)
 
             # Compute distributional TD loss using cross-entropy
             # This trains the Q-networks to match the target distributions
@@ -541,18 +500,11 @@ def main():
             ).mean()
             qf_loss = qf1_loss + qf2_loss
 
-            # check_tensor("qf1_loss", qf1_loss)
-            # check_tensor("qf2_loss", qf2_loss)
-            # check_tensor("qf_loss", qf_loss)
-
         # Perform gradient descent on critic networks
         q_optimizer.zero_grad(set_to_none=True)
         scaler.scale(qf_loss).backward()
         scaler.unscale_(q_optimizer)
 
-        # Monitor critic gradients before clipping (every 10 steps)
-        # if global_step % 10 == 0:
-        #     print_gradient_stats(qnet, "Critic", global_step, detailed=False)
         
         # Gradient clipping to prevent exploding gradients
         critic_grad_norm = torch.nn.utils.clip_grad_norm_(

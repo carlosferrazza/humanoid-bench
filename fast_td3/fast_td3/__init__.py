@@ -7,14 +7,12 @@ with distributional critics for reinforcement learning.
 from fast_td3.fast_td3 import Critic, DistributionalQNetwork
 from fast_td3.fast_td3_utils import EmpiricalNormalization, SimpleReplayBuffer, SimpleReplayBufferGNN
 from fast_td3.fast_td3_deploy import Policy, load_policy
-from fast_td3.actors import Actor, ActorEGNN, ActorMPNN, ActorAEGNN
+from fast_td3.actors import Actor, ActorEGNN
 
 __all__ = [
     # Core model components
     "Actor",
     "ActorEGNN",
-    "ActorMPNN",
-    "ActorAEGNN",
     "Critic",
     "DistributionalQNetwork",
     "EmpiricalNormalization",

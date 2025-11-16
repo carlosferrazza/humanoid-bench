@@ -218,29 +218,31 @@ class EGNN(nn.Module):
         self.has_mixed_node_types = env_name in env_with_object
         self.robot = robot
         # Use ModuleList for fast iteration and to avoid dict lookups
-        self.layers = nn.ModuleList([
-            E_GCL(
-                self.hidden_nf,
-                self.hidden_nf,
-                self.hidden_nf,
-                edges_in_d=in_edge_nf,
-                act_fn=act_fn,
-                residual=residual,
-                attention=attention,
-                normalize=normalize,
-                tanh=tanh,
-                coords_agg=coords_agg,
-            ) for _ in range(n_layers)
-        ])
-        self.graph_builder = GraphBuilder(env_name, batch_size, device, robot)
-        self.num_joints = len(self.graph_builder.robot.joint_connections)
-        self.num_nodes = self.num_joints
-        
-        self.joint_embedding_in = nn.Sequential(
-            nn.Linear(in_node_nf, self.hidden_nf),
-            act_fn
+        self.layers = nn.ModuleList(
+            [
+                E_GCL(
+                    self.hidden_nf,
+                    self.hidden_nf,
+                    self.hidden_nf,
+                    edges_in_d=in_edge_nf,
+                    act_fn=act_fn,
+                    residual=residual,
+                    attention=attention,
+                    normalize=normalize,
+                    tanh=tanh,
+                    coords_agg=coords_agg,
+                )
+                for _ in range(n_layers)
+            ]
         )
-        self.joint_embedding_out= nn.Sequential(
+        self.graph_builder = GraphBuilder(env_name, batch_size, device, robot)
+        self.num_joints = self.graph_builder.robot.num_joints
+        self.num_edges = self.graph_builder.robot.num_edges
+
+        self.joint_embedding_in = nn.Sequential(
+            nn.Linear(in_node_nf, self.hidden_nf), act_fn
+        )
+        self.joint_embedding_out = nn.Sequential(
             nn.Linear(self.hidden_nf, out_node_nf),
             nn.Tanh(),
         )
@@ -248,29 +250,23 @@ class EGNN(nn.Module):
         self.to(self.device)
         self._edges_cache = {}
 
-    def forward(self, h, x, edges):
-        current_batch_size = int(h.shape[0] / self.num_nodes)
-        h_joint, x_joint, _, _ = (
-            self.graph_builder.generate_input(h, x)
-        )
-        h_joint = self.joint_embedding_in(h_joint)
+    def forward(self, obs: torch.Tensor, xanchor: torch.Tensor) -> torch.Tensor:
+        current_batch_size = obs.shape[0]
+        edges = self.get_cached_edges(current_batch_size)
+        
+        h_joints, x_joint, _, _ = self.graph_builder.generate_input(obs, xanchor)
+
+        h_joints = self.joint_embedding_in(h_joints)
         for layer in self.layers:
-            h_joint, x_joint, _ = layer(h_joint, edges, x_joint)
+            h_joints, x_joint, _ = layer(h=h_joints, edge_index=edges, coord=x_joint)
 
-        actions = self.joint_embedding_out(h_joint)
+        actions = self.joint_embedding_out(h_joints)
 
-        return actions.view(current_batch_size, self.num_nodes)
-
+        return actions.view(current_batch_size, self.num_joints)
 
     def generate_index(self, batch_size: int, device="cuda"):
-        """
-        Generate joint-to-joint edge indices for given batch size.
-        Since we now process objects separately with MLP, we only need joint edges for EGNN.
-        """
-        # Always use joint-to-joint connections only
         src, dst = zip(*self.graph_builder.robot.joint_connections)
 
-        # Convert to tensors
         src = torch.tensor(src, dtype=torch.long, device=device)
         dst = torch.tensor(dst, dtype=torch.long, device=device)
 
@@ -282,11 +278,6 @@ class EGNN(nn.Module):
         return torch.stack([src_batch, dst_batch])
 
     def get_cached_edges(self, current_batch_size: int):
-        """
-        Optimized method to get edge indices with dynamic caching.
-        Automatically caches new batch sizes as they're encountered.
-        """
-        # Check if already cached
         if current_batch_size in self._edges_cache:
             return self._edges_cache[current_batch_size]
 

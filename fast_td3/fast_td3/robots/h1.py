@@ -15,6 +15,7 @@ class H1(Robot):
     def __init__(self, with_object: bool = False):
         super().__init__()
         self.with_object = with_object
+
     class JOINT(enum.IntEnum):
         left_hip_yaw = 0
         left_hip_roll = 1
@@ -38,6 +39,16 @@ class H1(Robot):
     
     class OBJECT(enum.IntEnum):
         free_object = 19
+
+    @property
+    def num_joints(self):
+        """Number of joints (nodes) in the robot graph."""
+        return len(self.JOINT)
+    
+    @property
+    def num_edges(self):
+        """Number of edges in the robot graph."""
+        return len(self.joint_connections)
 
     @property
     def joint_connections(self):
@@ -140,7 +151,6 @@ class H1(Robot):
             (self.JOINT.right_elbow, self.JOINT.right_shoulder_yaw),
     ]
 
-    
     @property
     def joint_connections_with_object(self):
         """List of directed edges including the optional object node.

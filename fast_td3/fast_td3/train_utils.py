@@ -232,12 +232,9 @@ def create_actor(
     
     if actor_type == "egnn":
         return ActorEGNN(
-            n_obs=n_obs,
-            n_act=n_act,
             num_envs=num_envs,
             batch_size=batch_size,
             device=device,
-            init_scale=init_scale,
             env_name=env_name,
             **model_kwargs,
         )

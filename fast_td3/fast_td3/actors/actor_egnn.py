@@ -7,10 +7,7 @@ from fast_td3.actors.gnn.egnn import EGNN
 class ActorEGNN(nn.Module):
     def __init__(
         self,
-        n_obs: int,
-        n_act: int, 
         num_envs: int,
-        init_scale: float,
         hidden_dim: int,
         batch_size: int,
         device: torch.device,
@@ -20,14 +17,12 @@ class ActorEGNN(nn.Module):
         robot: str = "h1",
         std_min: float = 0.05,
         std_max: float = 0.8,
-        n_edge_feat: int = 0,
         attention: bool = False,
         coords_agg: str = "mean",
         normalize: bool = False,
         tanh: bool = False,
     ):
         super().__init__()
-        self.n_act = n_act
         self.n_envs = num_envs
 
         match act_fn:
@@ -43,8 +38,9 @@ class ActorEGNN(nn.Module):
         # EGNN for message passing
         self.egnn = EGNN(
             hidden_nf=hidden_dim,
+            in_node_nf=2,
+            in_edge_nf=0,
             out_node_nf=1,
-            in_edge_nf=n_edge_feat,
             batch_size=batch_size,
             device=device,
             act_fn=act_fn,

@@ -23,7 +23,6 @@ from torch.amp import autocast, GradScaler
 from tensordict import TensorDict, from_module
 
 torch.autograd.set_detect_anomaly(True)
-torch.backends.cudnn.benchmark = False
 torch.set_float32_matmul_precision("high")
 from fast_td3.fast_td3_utils import (
     EmpiricalNormalization,

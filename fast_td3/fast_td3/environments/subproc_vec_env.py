@@ -1,6 +1,4 @@
 import multiprocessing as mp
-import os
-import platform
 import warnings
 from collections.abc import Sequence
 from typing import Any, Callable, Optional, Union
@@ -17,11 +15,6 @@ from stable_baselines3.common.vec_env.base_vec_env import (
     VecEnvStepReturn,
 )
 from stable_baselines3.common.vec_env.patch_gym import _patch_env
-
-
-# Set environment variable to disable fork safety on macOS
-if platform.system() == "Darwin":
-    os.environ["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"
 
 
 def _worker(  # noqa: C901
@@ -113,16 +106,11 @@ class SubprocVecEnv(VecEnv):
         n_envs = len(env_fns)
 
         if start_method is None:
-            # On macOS, we must use 'spawn' to avoid objc fork issues
-            if platform.system() == "Darwin":
-                start_method = "spawn"
-            else:
-                # Fork is not a thread safe method (see issue #217)
-                # but is more user friendly (does not require to wrap the code in
-                # a `if __name__ == "__main__":`)
-                forkserver_available = "forkserver" in mp.get_all_start_methods()
-                start_method = "forkserver" if forkserver_available else "spawn"
-        
+            # Fork is not a thread safe method (see issue #217)
+            # but is more user friendly (does not require to wrap the code in
+            # a `if __name__ == "__main__":`)
+            forkserver_available = "forkserver" in mp.get_all_start_methods()
+            start_method = "forkserver" if forkserver_available else "spawn"
         ctx = mp.get_context(start_method)
 
         self.remotes, self.work_remotes = zip(*[ctx.Pipe() for _ in range(n_envs)])
@@ -135,24 +123,8 @@ class SubprocVecEnv(VecEnv):
             self.processes.append(process)
             work_remote.close()
 
-        # Give processes time to start up on macOS
-        if platform.system() == "Darwin":
-            import time
-            time.sleep(0.1)
-
-        try:
-            self.remotes[0].send(("get_spaces", None))
-            observation_space, action_space = self.remotes[0].recv()
-        except EOFError as e:
-            # Clean up processes if initialization fails
-            for process in self.processes:
-                if process.is_alive():
-                    process.terminate()
-                    process.join(timeout=1)
-            raise RuntimeError(f"Failed to initialize environment processes. "
-                             f"This may be due to multiprocessing issues on macOS. "
-                             f"Try setting OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES environment variable. "
-                             f"Original error: {e}")
+        self.remotes[0].send(("get_spaces", None))
+        observation_space, action_space = self.remotes[0].recv()
 
         super().__init__(len(env_fns), observation_space, action_space)
         
@@ -170,7 +142,9 @@ class SubprocVecEnv(VecEnv):
         obs, rews, dones, infos, self.reset_infos, self.xanchor = zip(*results)  # type: ignore[assignment]
         return _stack_obs(obs, self.observation_space), np.stack(rews), np.stack(dones), infos, np.stack(self.xanchor)  # type: ignore[return-value]
 
-    def reset(self) -> Union[np.ndarray, dict[str, np.ndarray], tuple[np.ndarray, ...], np.ndarray]:
+    def reset(self, options=None) -> Union[np.ndarray, dict[str, np.ndarray], tuple[np.ndarray, ...], np.ndarray]:
+        if options is not None:
+            self._options = [options] * self.num_envs
         for env_idx, remote in enumerate(self.remotes):
             remote.send(("reset", (self._seeds[env_idx], self._options[env_idx])))
         results = [remote.recv() for remote in self.remotes]

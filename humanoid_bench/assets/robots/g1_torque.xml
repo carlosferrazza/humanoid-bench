@@ -79,6 +79,7 @@
   <worldbody>
     <body name="pelvis" pos="0 0 0.755" childclass="g1">
       <camera name="cam_default" pos="2 3 0.8" mode="trackcom" xyaxes="-1 0.5 0 -0.2 -0.2 1"/>
+      <camera name="cam_hurdle" pos="-3 3 3" mode="trackcom" xyaxes="-0.5 -0.5 0 0.4 -0.4 1"/>
       <inertial pos="0 0 -0.07605" quat="1 0 -0.000405289 0" mass="2.86" diaginertia="0.0079143 0.0069837 0.0059404"/>
       <freejoint name="free_base"/>
       <geom type="mesh" class="visual" mesh="pelvis"/>

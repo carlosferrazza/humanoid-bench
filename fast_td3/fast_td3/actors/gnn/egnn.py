@@ -1,6 +1,5 @@
 from torch import nn
 import torch
-from torch_scatter import scatter_sum, scatter_mean
 
 from fast_td3.robots.graph_builder import GraphBuilder
 
@@ -217,7 +216,11 @@ class EGNN(nn.Module):
         self.batch_size = batch_size
         self.has_mixed_node_types = env_name in env_with_object
         self.robot = robot
-        # Use ModuleList for fast iteration and to avoid dict lookups
+        self.graph_builder = GraphBuilder(env_name, batch_size, device, robot)
+        self.num_joints = self.graph_builder.robot.num_joints
+        self.num_edges = self.graph_builder.robot.num_edges
+        self._edges_cache = {}
+
         self.layers = nn.ModuleList(
             [
                 E_GCL(
@@ -235,9 +238,6 @@ class EGNN(nn.Module):
                 for _ in range(n_layers)
             ]
         )
-        self.graph_builder = GraphBuilder(env_name, batch_size, device, robot)
-        self.num_joints = self.graph_builder.robot.num_joints
-        self.num_edges = self.graph_builder.robot.num_edges
 
         self.joint_embedding_in = nn.Sequential(
             nn.Linear(in_node_nf, self.hidden_nf), act_fn
@@ -248,12 +248,10 @@ class EGNN(nn.Module):
         )
         
         self.to(self.device)
-        self._edges_cache = {}
 
     def forward(self, obs: torch.Tensor, xanchor: torch.Tensor) -> torch.Tensor:
         current_batch_size = obs.shape[0]
         edges = self.get_cached_edges(current_batch_size)
-        
         h_joints, x_joint, _, _ = self.graph_builder.generate_input(obs, xanchor)
 
         h_joints = self.joint_embedding_in(h_joints)
@@ -287,9 +285,32 @@ class EGNN(nn.Module):
         return edges
 
 
-def unsorted_segment_sum(data, segment_ids, num_segments):
-    return scatter_sum(data, segment_ids, dim=0, dim_size=num_segments)
+@torch.jit.script
+def unsorted_segment_sum(data: torch.Tensor, segment_ids: torch.Tensor, num_segments: int) -> torch.Tensor:
+    """
+    JIT-compiled optimized unsorted segment sum using scatter_add.
+    """
+    result = torch.zeros(num_segments, data.size(1), dtype=data.dtype, device=data.device)
+    segment_ids_expanded = segment_ids.unsqueeze(-1).expand(-1, data.size(1))
+    result.scatter_add_(0, segment_ids_expanded, data)
+    return result
 
 
-def unsorted_segment_mean(data, segment_ids, num_segments):
-    return scatter_mean(data, segment_ids, dim=0, dim_size=num_segments)
+@torch.jit.script
+def unsorted_segment_mean(data: torch.Tensor, segment_ids: torch.Tensor, num_segments: int) -> torch.Tensor:
+    """
+    JIT-compiled optimized unsorted segment mean with efficient counting.
+    """
+    result = torch.zeros(num_segments, data.size(1), dtype=data.dtype, device=data.device)
+    segment_ids_expanded = segment_ids.unsqueeze(-1).expand(-1, data.size(1))
+    
+    # Sum values
+    result.scatter_add_(0, segment_ids_expanded, data)
+    
+    # Count occurrences
+    count = torch.zeros(num_segments, data.size(1), dtype=data.dtype, device=data.device)
+    ones = torch.ones_like(data)
+    count.scatter_add_(0, segment_ids_expanded, ones)
+    
+    # Use torch.where to handle division by zero
+    return torch.where(count > 0, result / count, result)

@@ -76,12 +76,9 @@ class GraphBuilder:
         # Extract joint features
         joint_pos = obs[:, 7:26].reshape(-1, 1)  # [batch*19, 1]
         joint_vel = obs[:, 32:].reshape(-1, 1)  # [batch*19, 1]
-        h = torch.cat(
-            [joint_pos, joint_vel],
-            dim=1,
-        )
+        h = torch.cat([joint_vel, joint_pos], dim=1)
         x = (xanchor[:, 1:] - xanchor[:, [0]]).reshape(-1, 3)  # [batch*19, 3]
-        
+
         # Extract root/object features
         h_object = obs[:, 26:32]
         x_object = xanchor[:, [0]].reshape(-1, 3)  # [batch, 3]yY

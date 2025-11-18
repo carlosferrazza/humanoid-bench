@@ -40,6 +40,7 @@ from .envs.basic_locomotion_envs import (
     SitHard,
     Stair,
     Slide,
+    RunV2
 )
 from .envs.reach import Reach
 from .envs.pole import Pole
@@ -97,6 +98,7 @@ TASKS = {
     "insert_normal": Insert,
     "insert_small": Insert,  # This is not an error
     "powerlift": Powerlift,
+    "runv2": RunV2,
 }
 
 

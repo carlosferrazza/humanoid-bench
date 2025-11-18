@@ -3,18 +3,12 @@ from .robot import Robot
 
 
 class H1(Robot):
-    """H1 Robot metadata and topology.
+    """H1 Robot metadata and topology."""
 
-    Now supports an optional free object node that can be included in the
-    connection graph for visualization or graph-based policy inputs.
-
-    Use set_with_object(True/False) to switch between the standard joint-only
-    graph and the augmented graph including the free object.
-    """
-
-    def __init__(self, with_object: bool = False):
+    def __init__(self):
         super().__init__()
-        self.with_object = with_object
+        self._connections = set()
+        self._initialize_connections()
 
     class JOINT(enum.IntEnum):
         left_hip_yaw = 0
@@ -36,275 +30,86 @@ class H1(Robot):
         right_shoulder_roll = 16
         right_shoulder_yaw = 17
         right_elbow = 18
-    
-    class OBJECT(enum.IntEnum):
-        free_object = 19
 
-    @property
-    def num_joints(self):
-        """Number of joints (nodes) in the robot graph."""
-        return len(self.JOINT)
-    
+    def add_connection(self, joint1, joint2):
+        """Add a bidirectional connection between two joints."""
+        self._connections.add((joint1, joint2))
+        self._connections.add((joint2, joint1))
+
+    def _initialize_connections(self):
+        """Initialize the default joint connections."""
+
+        default_undirected_connections = [
+            # Left leg chain and internal connections
+            (self.JOINT.left_hip_yaw, self.JOINT.left_hip_roll),
+            (self.JOINT.left_hip_yaw, self.JOINT.left_hip_pitch),
+            (self.JOINT.left_hip_roll, self.JOINT.left_hip_pitch),
+            (self.JOINT.left_hip_yaw, self.JOINT.left_knee),
+            (self.JOINT.left_hip_roll, self.JOINT.left_knee),
+            (self.JOINT.left_hip_pitch, self.JOINT.left_knee),
+            (self.JOINT.left_knee, self.JOINT.left_ankle),
+            # Right leg chain and internal connections
+            (self.JOINT.right_hip_yaw, self.JOINT.right_hip_roll),
+            (self.JOINT.right_hip_yaw, self.JOINT.right_hip_pitch),
+            (self.JOINT.right_hip_roll, self.JOINT.right_hip_pitch),
+            (self.JOINT.right_hip_yaw, self.JOINT.right_knee),
+            (self.JOINT.right_hip_roll, self.JOINT.right_knee),
+            (self.JOINT.right_hip_pitch, self.JOINT.right_knee),
+            (self.JOINT.right_knee, self.JOINT.right_ankle),
+            # Left arm chain and internal connections
+            (self.JOINT.left_shoulder_pitch, self.JOINT.left_shoulder_roll),
+            (self.JOINT.left_shoulder_pitch, self.JOINT.left_shoulder_yaw),
+            (self.JOINT.left_shoulder_roll, self.JOINT.left_shoulder_yaw),
+            (self.JOINT.left_shoulder_roll, self.JOINT.left_elbow),
+            (self.JOINT.left_shoulder_pitch, self.JOINT.left_elbow),
+            (self.JOINT.left_shoulder_roll, self.JOINT.left_elbow),
+            (self.JOINT.left_shoulder_yaw, self.JOINT.left_elbow),
+            # Right arm chain and internal connections
+            (self.JOINT.right_shoulder_pitch, self.JOINT.right_shoulder_roll),
+            (self.JOINT.right_shoulder_pitch, self.JOINT.right_shoulder_yaw),
+            (self.JOINT.right_shoulder_roll, self.JOINT.right_shoulder_yaw),
+            (self.JOINT.right_shoulder_pitch, self.JOINT.right_elbow),
+            (self.JOINT.right_shoulder_roll, self.JOINT.right_elbow),
+            (self.JOINT.right_shoulder_yaw, self.JOINT.right_elbow),
+            # Torso connections to all joints
+            (self.JOINT.torso, self.JOINT.left_hip_yaw),
+            (self.JOINT.torso, self.JOINT.left_hip_roll),
+            (self.JOINT.torso, self.JOINT.left_hip_pitch),
+            (self.JOINT.torso, self.JOINT.left_knee),
+            (self.JOINT.torso, self.JOINT.left_ankle),
+            (self.JOINT.torso, self.JOINT.right_hip_yaw),
+            (self.JOINT.torso, self.JOINT.right_hip_roll),
+            (self.JOINT.torso, self.JOINT.right_hip_pitch),
+            (self.JOINT.torso, self.JOINT.right_knee),
+            (self.JOINT.torso, self.JOINT.right_ankle),
+            (self.JOINT.torso, self.JOINT.left_shoulder_pitch),
+            (self.JOINT.torso, self.JOINT.left_shoulder_roll),
+            (self.JOINT.torso, self.JOINT.left_shoulder_yaw),
+            (self.JOINT.torso, self.JOINT.left_elbow),
+            (self.JOINT.torso, self.JOINT.right_shoulder_pitch),
+            (self.JOINT.torso, self.JOINT.right_shoulder_roll),
+            (self.JOINT.torso, self.JOINT.right_shoulder_yaw),
+            (self.JOINT.torso, self.JOINT.right_elbow),
+        ]
+        # Add each undirected pair (bidirectional will be added automatically)
+        for a, b in default_undirected_connections:
+            self.add_connection(a, b)
+
     @property
     def num_edges(self):
         """Number of edges in the robot graph."""
         return len(self.joint_connections)
+    
+    @property
+    def num_joints(self):
+        """Number of joints in the robot graph."""
+        return len(self.JOINT)
 
     @property
     def joint_connections(self):
         """List of directed joint-to-joint edges (no object)."""
-        return [
-            # left hip yaw
-            (self.JOINT.left_hip_yaw, self.JOINT.torso),
-            (self.JOINT.left_hip_yaw, self.JOINT.left_hip_roll),
-            (self.JOINT.left_hip_yaw, self.JOINT.left_hip_pitch),
-            (self.JOINT.left_hip_yaw, self.JOINT.left_knee),
-            # left hip roll
-            (self.JOINT.left_hip_roll, self.JOINT.torso),
-            (self.JOINT.left_hip_roll, self.JOINT.left_hip_yaw),
-            (self.JOINT.left_hip_roll, self.JOINT.left_hip_pitch),
-            (self.JOINT.left_hip_roll, self.JOINT.left_knee),
-            # left hip pitch
-            (self.JOINT.left_hip_pitch, self.JOINT.torso),
-            (self.JOINT.left_hip_pitch, self.JOINT.left_hip_yaw),
-            (self.JOINT.left_hip_pitch, self.JOINT.left_hip_roll),
-            (self.JOINT.left_hip_pitch, self.JOINT.left_knee),
-            # left knee
-            (self.JOINT.left_knee, self.JOINT.left_hip_yaw),
-            (self.JOINT.left_knee, self.JOINT.left_hip_roll),
-            (self.JOINT.left_knee, self.JOINT.left_hip_pitch),
-            (self.JOINT.left_knee, self.JOINT.left_ankle),
-            # left ankle
-            (self.JOINT.left_ankle, self.JOINT.left_knee),
-            # right hip yaw
-            (self.JOINT.right_hip_yaw, self.JOINT.torso),
-            (self.JOINT.right_hip_yaw, self.JOINT.right_hip_roll),
-            (self.JOINT.right_hip_yaw, self.JOINT.right_hip_pitch),
-            (self.JOINT.right_hip_yaw, self.JOINT.right_knee),
-            # right hip roll
-            (self.JOINT.right_hip_roll, self.JOINT.torso),
-            (self.JOINT.right_hip_roll, self.JOINT.right_hip_yaw),
-            (self.JOINT.right_hip_roll, self.JOINT.right_hip_pitch),
-            (self.JOINT.right_hip_roll, self.JOINT.right_knee),
-            # right hip pitch
-            (self.JOINT.right_hip_pitch, self.JOINT.torso),
-            (self.JOINT.right_hip_pitch, self.JOINT.right_hip_yaw),
-            (self.JOINT.right_hip_pitch, self.JOINT.right_hip_roll),
-            (self.JOINT.right_hip_pitch, self.JOINT.right_knee),
-            # right knee
-            (self.JOINT.right_knee, self.JOINT.right_hip_yaw),
-            (self.JOINT.right_knee, self.JOINT.right_hip_roll),
-            (self.JOINT.right_knee, self.JOINT.right_hip_pitch),
-            (self.JOINT.right_knee, self.JOINT.right_ankle),
-            # right ankle
-            (self.JOINT.right_ankle, self.JOINT.right_knee),
-            # torso
-            (self.JOINT.torso, self.JOINT.left_hip_yaw),
-            (self.JOINT.torso, self.JOINT.right_hip_yaw),
-            (self.JOINT.torso, self.JOINT.left_hip_roll),
-            (self.JOINT.torso, self.JOINT.right_hip_roll),
-            (self.JOINT.torso, self.JOINT.left_hip_pitch),
-            (self.JOINT.torso, self.JOINT.right_hip_pitch),
-            (self.JOINT.torso, self.JOINT.left_shoulder_pitch),
-            (self.JOINT.torso, self.JOINT.right_shoulder_pitch),
-            (self.JOINT.torso, self.JOINT.left_shoulder_roll),
-            (self.JOINT.torso, self.JOINT.right_shoulder_roll),
-            (self.JOINT.torso, self.JOINT.left_shoulder_yaw),
-            (self.JOINT.torso, self.JOINT.right_shoulder_yaw),
-            # left shoulder pitch
-            (self.JOINT.left_shoulder_pitch, self.JOINT.torso),
-            (self.JOINT.left_shoulder_pitch, self.JOINT.left_shoulder_roll),
-            (self.JOINT.left_shoulder_pitch, self.JOINT.left_shoulder_yaw),
-            (self.JOINT.left_shoulder_pitch, self.JOINT.left_elbow),
-            # left shoulder roll
-            (self.JOINT.left_shoulder_roll, self.JOINT.torso),
-            (self.JOINT.left_shoulder_roll, self.JOINT.left_shoulder_pitch),
-            (self.JOINT.left_shoulder_roll, self.JOINT.left_shoulder_yaw),
-            (self.JOINT.left_shoulder_roll, self.JOINT.left_elbow),
-            # left shoulder yaw
-            (self.JOINT.left_shoulder_yaw, self.JOINT.torso),
-            (self.JOINT.left_shoulder_yaw, self.JOINT.left_shoulder_roll),
-            (self.JOINT.left_shoulder_yaw, self.JOINT.left_shoulder_pitch),
-            (self.JOINT.left_shoulder_yaw, self.JOINT.left_elbow),
-            # left elbow
-            (self.JOINT.left_elbow, self.JOINT.left_shoulder_roll),
-            (self.JOINT.left_elbow, self.JOINT.left_shoulder_pitch),
-            (self.JOINT.left_elbow, self.JOINT.left_shoulder_yaw),
-            # right shoulder pitch
-            (self.JOINT.right_shoulder_pitch, self.JOINT.torso),
-            (self.JOINT.right_shoulder_pitch, self.JOINT.right_shoulder_roll),
-            (self.JOINT.right_shoulder_pitch, self.JOINT.right_shoulder_yaw),
-            (self.JOINT.right_shoulder_pitch, self.JOINT.right_elbow),
-            # right shoulder roll
-            (self.JOINT.right_shoulder_roll, self.JOINT.torso),
-            (self.JOINT.right_shoulder_roll, self.JOINT.right_shoulder_pitch),
-            (self.JOINT.right_shoulder_roll, self.JOINT.right_shoulder_yaw),
-            (self.JOINT.right_shoulder_roll, self.JOINT.right_elbow),
-            # right shoulder yaw
-            (self.JOINT.right_shoulder_yaw, self.JOINT.torso),
-            (self.JOINT.right_shoulder_yaw, self.JOINT.right_shoulder_roll),
-            (self.JOINT.right_shoulder_yaw, self.JOINT.right_shoulder_pitch),
-            (self.JOINT.right_shoulder_yaw, self.JOINT.right_elbow),
-            # right elbow
-            (self.JOINT.right_elbow, self.JOINT.right_shoulder_roll),
-            (self.JOINT.right_elbow, self.JOINT.right_shoulder_pitch),
-            (self.JOINT.right_elbow, self.JOINT.right_shoulder_yaw),
-    ]
+        return sorted(self._connections)
 
-    @property
-    def joint_connections_with_object(self):
-        """List of directed edges including the optional object node.
-
-        These edges include both joint-joint, joint-object, and object-joint
-        connections so downstream models can treat them uniformly.
-        """
-        return [
-            # left hip yaw
-            (self.JOINT.left_hip_yaw, self.JOINT.torso),
-            (self.JOINT.left_hip_yaw, self.JOINT.left_hip_roll),
-            (self.JOINT.left_hip_yaw, self.JOINT.left_hip_pitch),
-            (self.JOINT.left_hip_yaw, self.JOINT.left_knee),
-            (self.JOINT.left_hip_yaw, self.OBJECT.free_object),
-            # left hip roll
-            (self.JOINT.left_hip_roll, self.JOINT.torso),
-            (self.JOINT.left_hip_roll, self.JOINT.left_hip_yaw),
-            (self.JOINT.left_hip_roll, self.JOINT.left_hip_pitch),
-            (self.JOINT.left_hip_roll, self.JOINT.left_knee),
-            (self.JOINT.left_hip_roll, self.OBJECT.free_object),
-            # left hip pitch
-            (self.JOINT.left_hip_pitch, self.JOINT.torso),
-            (self.JOINT.left_hip_pitch, self.JOINT.left_hip_yaw),
-            (self.JOINT.left_hip_pitch, self.JOINT.left_hip_roll),
-            (self.JOINT.left_hip_pitch, self.JOINT.left_knee),
-            (self.JOINT.left_hip_pitch, self.OBJECT.free_object),
-            # left knee
-            (self.JOINT.left_knee, self.JOINT.left_hip_yaw),
-            (self.JOINT.left_knee, self.JOINT.left_hip_roll),
-            (self.JOINT.left_knee, self.JOINT.left_hip_pitch),
-            (self.JOINT.left_knee, self.JOINT.left_ankle),
-            (self.JOINT.left_knee, self.OBJECT.free_object),
-            # left ankle
-            (self.JOINT.left_ankle, self.JOINT.left_knee),
-            (self.JOINT.left_ankle, self.OBJECT.free_object),
-            # right hip yaw
-            (self.JOINT.right_hip_yaw, self.JOINT.torso),
-            (self.JOINT.right_hip_yaw, self.JOINT.right_hip_roll),
-            (self.JOINT.right_hip_yaw, self.JOINT.right_hip_pitch),
-            (self.JOINT.right_hip_yaw, self.JOINT.right_knee),
-            (self.JOINT.right_hip_yaw, self.OBJECT.free_object),
-            # right hip roll
-            (self.JOINT.right_hip_roll, self.JOINT.torso),
-            (self.JOINT.right_hip_roll, self.JOINT.right_hip_yaw),
-            (self.JOINT.right_hip_roll, self.JOINT.right_hip_pitch),
-            (self.JOINT.right_hip_roll, self.JOINT.right_knee),
-            (self.JOINT.right_hip_roll, self.OBJECT.free_object),
-            # right hip pitch
-            (self.JOINT.right_hip_pitch, self.JOINT.torso),
-            (self.JOINT.right_hip_pitch, self.JOINT.right_hip_yaw),
-            (self.JOINT.right_hip_pitch, self.JOINT.right_hip_roll),
-            (self.JOINT.right_hip_pitch, self.JOINT.right_knee),
-            (self.JOINT.right_hip_pitch, self.OBJECT.free_object),
-            # right knee
-            (self.JOINT.right_knee, self.JOINT.right_hip_yaw),
-            (self.JOINT.right_knee, self.JOINT.right_hip_roll),
-            (self.JOINT.right_knee, self.JOINT.right_hip_pitch),
-            (self.JOINT.right_knee, self.JOINT.right_ankle),
-            (self.JOINT.right_knee, self.OBJECT.free_object),
-            # right ankle
-            (self.JOINT.right_ankle, self.JOINT.right_knee),
-            (self.JOINT.right_ankle, self.OBJECT.free_object),
-            # torso
-            (self.JOINT.torso, self.JOINT.left_hip_yaw),
-            (self.JOINT.torso, self.JOINT.right_hip_yaw),
-            (self.JOINT.torso, self.JOINT.left_hip_roll),
-            (self.JOINT.torso, self.JOINT.right_hip_roll),
-            (self.JOINT.torso, self.JOINT.left_hip_pitch),
-            (self.JOINT.torso, self.JOINT.right_hip_pitch),
-            (self.JOINT.torso, self.JOINT.left_shoulder_pitch),
-            (self.JOINT.torso, self.JOINT.right_shoulder_pitch),
-            (self.JOINT.torso, self.JOINT.left_shoulder_roll),
-            (self.JOINT.torso, self.JOINT.right_shoulder_roll),
-            (self.JOINT.torso, self.JOINT.left_shoulder_yaw),
-            (self.JOINT.torso, self.JOINT.right_shoulder_yaw),
-            (self.JOINT.torso, self.OBJECT.free_object),
-            # left shoulder pitch
-            (self.JOINT.left_shoulder_pitch, self.JOINT.torso),
-            (self.JOINT.left_shoulder_pitch, self.JOINT.left_shoulder_roll),
-            (self.JOINT.left_shoulder_pitch, self.JOINT.left_shoulder_yaw),
-            (self.JOINT.left_shoulder_pitch, self.JOINT.left_elbow),
-            (self.JOINT.left_shoulder_pitch, self.OBJECT.free_object),
-            # left shoulder roll
-            (self.JOINT.left_shoulder_roll, self.JOINT.torso),
-            (self.JOINT.left_shoulder_roll, self.JOINT.left_shoulder_pitch),
-            (self.JOINT.left_shoulder_roll, self.JOINT.left_shoulder_yaw),
-            (self.JOINT.left_shoulder_roll, self.JOINT.left_elbow),
-            (self.JOINT.left_shoulder_roll, self.OBJECT.free_object),
-            # left shoulder yaw
-            (self.JOINT.left_shoulder_yaw, self.JOINT.torso),
-            (self.JOINT.left_shoulder_yaw, self.JOINT.left_shoulder_roll),
-            (self.JOINT.left_shoulder_yaw, self.JOINT.left_shoulder_pitch),
-            (self.JOINT.left_shoulder_yaw, self.JOINT.left_elbow),
-            (self.JOINT.left_shoulder_yaw, self.OBJECT.free_object),
-            # left elbow
-            (self.JOINT.left_elbow, self.JOINT.left_shoulder_roll),
-            (self.JOINT.left_elbow, self.JOINT.left_shoulder_pitch),
-            (self.JOINT.left_elbow, self.JOINT.left_shoulder_yaw),
-            (self.JOINT.left_elbow, self.OBJECT.free_object),
-            # right shoulder pitch
-            (self.JOINT.right_shoulder_pitch, self.JOINT.torso),
-            (self.JOINT.right_shoulder_pitch, self.JOINT.right_shoulder_roll),
-            (self.JOINT.right_shoulder_pitch, self.JOINT.right_shoulder_yaw),
-            (self.JOINT.right_shoulder_pitch, self.JOINT.right_elbow),
-            (self.JOINT.right_shoulder_pitch, self.OBJECT.free_object),
-            # right shoulder roll
-            (self.JOINT.right_shoulder_roll, self.JOINT.torso),
-            (self.JOINT.right_shoulder_roll, self.JOINT.right_shoulder_pitch),
-            (self.JOINT.right_shoulder_roll, self.JOINT.right_shoulder_yaw),
-            (self.JOINT.right_shoulder_roll, self.JOINT.right_elbow),
-            (self.JOINT.right_shoulder_roll, self.OBJECT.free_object),
-            # right shoulder yaw
-            (self.JOINT.right_shoulder_yaw, self.JOINT.torso),
-            (self.JOINT.right_shoulder_yaw, self.JOINT.right_shoulder_roll),
-            (self.JOINT.right_shoulder_yaw, self.JOINT.right_shoulder_pitch),
-            (self.JOINT.right_shoulder_yaw, self.JOINT.right_elbow),
-            (self.JOINT.right_shoulder_yaw, self.OBJECT.free_object),
-            # right elbow
-            (self.JOINT.right_elbow, self.JOINT.right_shoulder_roll),
-            (self.JOINT.right_elbow, self.JOINT.right_shoulder_pitch),
-            (self.JOINT.right_elbow, self.JOINT.right_shoulder_yaw),
-            (self.JOINT.right_elbow, self.OBJECT.free_object),
-
-            # objecet to all joints
-            (self.OBJECT.free_object, self.JOINT.left_hip_yaw),
-            (self.OBJECT.free_object, self.JOINT.left_hip_roll),
-            (self.OBJECT.free_object, self.JOINT.left_hip_pitch),
-            (self.OBJECT.free_object, self.JOINT.left_knee),
-            (self.OBJECT.free_object, self.JOINT.left_ankle),
-            (self.OBJECT.free_object, self.JOINT.right_hip_yaw),
-            (self.OBJECT.free_object, self.JOINT.right_hip_roll),
-            (self.OBJECT.free_object, self.JOINT.right_hip_pitch),
-            (self.OBJECT.free_object, self.JOINT.right_knee),
-            (self.OBJECT.free_object, self.JOINT.right_ankle),
-            (self.OBJECT.free_object, self.JOINT.torso),
-            (self.OBJECT.free_object, self.JOINT.left_shoulder_pitch),
-            (self.OBJECT.free_object, self.JOINT.left_shoulder_roll),
-            (self.OBJECT.free_object, self.JOINT.left_shoulder_yaw),
-            (self.OBJECT.free_object, self.JOINT.left_elbow),
-            (self.OBJECT.free_object, self.JOINT.right_shoulder_pitch),
-            (self.OBJECT.free_object, self.JOINT.right_shoulder_roll),
-            (self.OBJECT.free_object, self.JOINT.right_shoulder_yaw),
-            (self.OBJECT.free_object, self.JOINT.right_elbow),
-        ]
-
-    def set_with_object(self, enabled: bool):
-        """Enable or disable usage of the object-connected graph."""
-        self.with_object = enabled
-        return self  # allow chaining
-
-    @property
-    def active_connections(self):
-        """Return the currently active edge list based on with_object flag."""
-        return self.joint_connections_with_object if self.with_object else self.joint_connections
 
 
     @property
@@ -323,24 +128,17 @@ class H1(Robot):
             "shoulder_elbow": "#0099AA",  # Teal - Shoulder to elbow
             "arm_other": "#006666",  # Dark teal - Other arm connections
             "cross_body": "#333333",  # Dark gray - Cross body connections
-            "object": "#CC00CC",  # Magenta - Object connections
         }
 
     def get_joint_name(self, joint_id):
-        """Convert a node id to readable name (handles joint or object)."""
-        # Handle object node
-        if self.with_object and joint_id == self.OBJECT.free_object:
-            return "free_object"
+        """Convert a node id to readable name."""
         try:
             return self.JOINT(joint_id).name
         except ValueError:
             return f"node_{joint_id}"
 
-    def get_robot_layout_positions(self, with_object=False):
-        """Define positions to create a robot-like symmetric layout.
-
-        If with_object=True an extra node is placed slightly in front of the torso.
-        """
+    def get_robot_layout_positions(self):
+        """Define positions to create a robot-like symmetric layout."""
         positions = {}
         positions[self.JOINT.torso] = (0, 0)  # Torso center
 
@@ -370,19 +168,11 @@ class H1(Robot):
         positions[self.JOINT.right_knee] = (0.5, -2)
         positions[self.JOINT.right_ankle] = (0.5, -2.5)
 
-        if with_object or self.with_object:
-            # Place object slightly forward/up from torso for visibility
-            positions[self.OBJECT.free_object] = (0, 0.9)
-
         return positions
 
     def get_connection_type(self, joint1_id, joint2_id):
         # Ensure consistent ordering for lookup
         j1, j2 = sorted([joint1_id, joint2_id])
-
-        # Object connections override and are simple category
-        if self.with_object and (j1 == self.OBJECT.free_object or j2 == self.OBJECT.free_object):
-            return "object"
 
         # Torso connections (highest priority)
         if j1 == self.JOINT.torso or j2 == self.JOINT.torso:

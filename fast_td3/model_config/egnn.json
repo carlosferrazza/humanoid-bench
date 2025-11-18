@@ -3,4 +3,6 @@
     "n_layers": 4,
     "act_fn": "relu",
     "coords_agg": "mean"
+    // "tanh": true
+    // "normalize": true
 }

@@ -3,62 +3,22 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import torch
 
-from .h1 import H1
-
-
-class NodeType(enum.IntEnum):
-    JOINT = 0
-    OBJECT = 1
-
-
-class EdgeType(enum.IntEnum):
-    JOINT_TO_JOINT = 0
-    JOINT_TO_OBJECT = 1
-
-
-env_with_object = [
-    "h1-push-v0",  # medium
-    "h1-basketball-v0",  # very hard
-    "h1-package-v0",  # medium
-    "h1-sit_hard-v0",  # hard
-    "h1-balance_simple-v0",  # hard
-]
-
-env_without_object = [
-    "h1-walk-v0",
-    "h1-reach-v0",
-    "h1-hurdle-v0",
-    "h1-crawl-v0",
-    "h1-maze-v0",
-    "h1-highbar_simple-v0",
-    "h1-stand-v0",
-    "h1-run-v0",
-    "h1-sit_simple-v0",
-    "h1-stairs-v0",
-    "h1-slide-v0",
-    "h1-pole-v0",
-]
+from fast_td3.robots.h1 import H1
+from fast_td3.robots.g1 import G1
 
 
 # TODO: this currently works for h1, need to generalize for other robots
 class GraphBuilder:
-    """Utility to build graph tensors and visualize robot topology.
-
-    Supports optional inclusion of a free object node controlled via:
-      - env_name membership in env_with_object (default inference)
-      - explicit with_object flag passed to __init__ or visualize_graph()
-    """
+    """Utility to build graph tensors and visualize robot topology."""
 
     def __init__(
-        self, env_name, batch_size, device, robot="h1", with_object: bool | None = None
+        self, env_name, batch_size, device, robot="h1"
     ):
-        if robot.lower() == "h1":
-            # Decide whether to construct robot with object: explicit flag overrides env inference
-            if with_object is None:
-                inferred = env_name in env_with_object
-                self.robot = H1(with_object=inferred)
-            else:
-                self.robot = H1(with_object=with_object)
+        robot_lower = robot.lower()
+        if robot_lower == "h1":
+            self.robot = H1()
+        elif robot_lower == "g1":
+            self.robot = G1()
         else:
             raise NotImplementedError(f"Robot {robot} not implemented.")
 
@@ -85,58 +45,32 @@ class GraphBuilder:
 
         return h, x, h_object, x_object
 
-    @torch.compile(dynamic=True)
-    def generate_input_for_mixed_type(self, obs: torch.tensor, xanchor: torch.tensor):
-        if self.env_name in env_with_object:
-            assert xanchor.shape[1] == 21, f"xanchor shape: {xanchor.shape}"
-            x_joint = (xanchor[:, 1:20] - xanchor[:, [0]]).reshape(-1, 3)
-            x_object = (xanchor[:, 20:] - xanchor[:, [0]]).reshape(-1, 3)
 
-            h_node = torch.cat(
-                [
-                    obs[:, 7:26].reshape(-1, 1),
-                    obs[:, 39:58].reshape(-1, 1),
-                ],
-                dim=1,
-            )
-
-            # position, quarternion, linear velocity, angular velocity of pelvis and object
-            h_object = torch.cat([obs[:, 0:7], obs[:, 26:39], obs[:, 58:64]], dim=1)
-
-            return h_node, h_object, x_joint, x_object
 
     def visualize_graph(
-        self, with_object: bool | None = None, save_path: str = "robot_graph.png"
+        self, save_path: str = "robot_graph.png"
     ):
         """Visualize the current graph.
 
         Args:
-            with_object: Optional override to include the object node even if env doesn't; if None uses robot.with_object
             save_path: Path to save the generated image.
         """
-        if with_object is not None:
-            self.robot.set_with_object(with_object)
-
         G = nx.DiGraph()
 
         # Determine node ids to add
         num_joint_nodes = len(self.robot.JOINT)
-        joint_ids = list(range(num_joint_nodes))
-        if self.robot.with_object:
-            all_node_ids = joint_ids + [self.robot.OBJECT.free_object]
-        else:
-            all_node_ids = joint_ids
+        all_node_ids = list(range(num_joint_nodes))
 
         # Add nodes with joint/object names as labels
         for nid in all_node_ids:
             G.add_node(nid, label=self.robot.get_joint_name(nid))
 
         # Add edges
-        for edge in self.robot.active_connections:
+        for edge in self.robot.joint_connections:
             G.add_edge(edge[0], edge[1])
 
-        # Use custom robot-like layout (pass override flag)
-        pos = self.robot.get_robot_layout_positions(with_object=self.robot.with_object)
+        # Use custom robot-like layout
+        pos = self.robot.get_robot_layout_positions()
 
         # Create labels dictionary
         labels = {nid: self.robot.get_joint_name(nid) for nid in G.nodes()}
@@ -183,9 +117,8 @@ class GraphBuilder:
             G, pos, labels, font_size=4, font_weight="bold", font_color="black"
         )
 
-        title_suffix = " + Object" if self.robot.with_object else ""
         plt.title(
-            f"Humanoid Robot Joint Connection Graph{title_suffix}\n(Color-coded by Connection Type)",
+            f"Humanoid Robot Joint Connection Graph\n(Color-coded by Connection Type)",
             fontsize=10,
             fontweight="bold",
             pad=20,
@@ -198,7 +131,10 @@ class GraphBuilder:
 
 if __name__ == "__main__":
     # Example standalone usage for quick visual checks
-    gb = GraphBuilder(env_name="h1-run-v0", batch_size=1, device="cpu")
-    gb.visualize_graph(save_path="robot_graph_no_object.png")
-    gb.visualize_graph(with_object=True, save_path="robot_graph_with_object.png")
-    # print(gb.generate_edge_index(env_name="h1-run-v0", batch_size=4))  # Example usage
+    print("Visualizing H1 robot...")
+    gb_h1 = GraphBuilder(env_name="h1-run-v0", batch_size=1, device="cpu", robot="h1")
+    gb_h1.visualize_graph(save_path="h1_robot_graph.png")
+    
+    print("Visualizing G1 robot...")
+    gb_g1 = GraphBuilder(env_name="g1-run-v0", batch_size=1, device="cpu", robot="g1")
+    gb_g1.visualize_graph(save_path="g1_robot_graph.png")

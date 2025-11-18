@@ -89,11 +89,10 @@ class BaseArgs:
     """the maximum gradient norm"""
     amp: bool = True
     """whether to use amp"""
-    amp_dtype: str = "bf16"
+    amp_dtype: str = "f16"
     """the dtype of the amp"""
     disable_bootstrap: bool = False
     """Whether to disable bootstrap in the critic learning"""
-
     use_domain_randomization: bool = False
     """(Playground only) whether to use domain randomization"""
     use_push_randomization: bool = False
@@ -102,7 +101,6 @@ class BaseArgs:
     """(Playground only) Use tuned reward for G1"""
     action_bounds: float = 1.0
     """(IsaacLab only) the bounds of the action space (-action_bounds, action_bounds)"""
-
     weight_decay: float = 0.1
     """the weight decay of the optimizer"""
     save_interval: int = 5000

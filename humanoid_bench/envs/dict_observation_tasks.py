@@ -39,9 +39,10 @@ class DictObservationMixin:
         # Joint velocities (excluding free joint: 6 DoF)
         n_joint_vel = robot_dof - 7
         
-        # xanchor: number of anchors (typically 20 for H1)
-        # This is determined at runtime from the environment
-        n_xanchor = 20  # Default for H1, may vary for other robots
+        # xanchor: number of anchors depends on the robot
+        # H1: 20 anchors, G1: varies based on model
+        # We compute this dynamically in get_obs, here we use robot_dof as approximation
+        n_xanchor = robot_dof - 6  # Typically (dof - 6) anchors
         
         return Dict({
             "pelvis_position": Box(

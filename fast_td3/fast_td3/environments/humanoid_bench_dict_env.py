@@ -187,8 +187,9 @@ class HumanoidBenchDictEnv:
         # This will be used for getting 'true' next observations
         infos = dict()
         
+        # Note: We need a copy here because raw_obs is modified when handling
+        # truncated episodes below (terminal observations replace current obs)
         if isinstance(observations, dict):
-            # Create a copy of dict observations for raw
             raw_obs = {key: observations[key].copy() for key in observations}
         else:
             raw_obs = observations.copy()

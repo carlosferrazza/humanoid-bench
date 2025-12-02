@@ -302,11 +302,12 @@ def main():
         )
 
         actor.load_state_dict(torch_checkpoint["actor_state_dict"])
-        obs_normalizer.load_state_dict(torch_checkpoint["obs_normalizer_state"])
-        xanchor_normalizer.load_state_dict(torch_checkpoint["xanchor_normalizer_state"])
-        critic_obs_normalizer.load_state_dict(
-            torch_checkpoint["critic_obs_normalizer_state"]
-        )
+        if hasattr(obs_normalizer, "load_state_dict") and torch_checkpoint.get("obs_normalizer_state"):
+            obs_normalizer.load_state_dict(torch_checkpoint["obs_normalizer_state"])
+        if hasattr(xanchor_normalizer, "load_state_dict") and torch_checkpoint.get("xanchor_normalizer_state"):
+            xanchor_normalizer.load_state_dict(torch_checkpoint["xanchor_normalizer_state"])
+        if hasattr(critic_obs_normalizer, "load_state_dict") and torch_checkpoint.get("critic_obs_normalizer_state"):
+            critic_obs_normalizer.load_state_dict(torch_checkpoint["critic_obs_normalizer_state"])
         qnet.load_state_dict(torch_checkpoint["qnet_state_dict"])
         qnet_target.load_state_dict(torch_checkpoint["qnet_target_state_dict"])
         global_step = torch_checkpoint["global_step"]
@@ -316,25 +317,34 @@ def main():
     def get_flat_obs_and_xanchor(obs_dict, xanchor_tensor):
         """
         Convert dict observations to flat tensor for actor/critic.
-        For dict observations, extract xanchor from the dict if present.
+        
+        Args:
+            obs_dict: Either a dict observation or flat tensor observation
+            xanchor_tensor: xanchor tensor (used when obs_dict is flat)
+            
+        Returns:
+            tuple: (flat_obs, xanchor)
+            - flat_obs: Flattened observation tensor (excludes xanchor)
+            - xanchor: xanchor tensor from dict['xanchor'] if available, otherwise xanchor_tensor
+            
+        Note: The flat observation is created by concatenating fields in a fixed order:
+        pelvis_position, pelvis_quaternion, pelvis_linear_velocity, 
+        pelvis_angular_velocity, joint_positions, joint_velocities
         """
         if isinstance(obs_dict, dict):
-            # Extract xanchor from dict if present
-            if 'xanchor' in obs_dict:
-                xanchor = obs_dict['xanchor']
-            else:
-                xanchor = xanchor_tensor
+            # xanchor is always extracted from dict if present, otherwise use the fallback
+            xanchor = obs_dict.get('xanchor', xanchor_tensor)
             
-            # Create flat observation by concatenating relevant fields
-            flat_parts = []
-            for key in ['pelvis_position', 'pelvis_quaternion', 
-                       'pelvis_linear_velocity', 'pelvis_angular_velocity',
-                       'joint_positions', 'joint_velocities']:
-                if key in obs_dict:
-                    flat_parts.append(obs_dict[key])
+            # Create flat observation by concatenating fields in fixed order
+            # This order must match the expected input format for the actor/critic
+            OBS_KEYS_ORDER = ['pelvis_position', 'pelvis_quaternion', 
+                              'pelvis_linear_velocity', 'pelvis_angular_velocity',
+                              'joint_positions', 'joint_velocities']
+            flat_parts = [obs_dict[key] for key in OBS_KEYS_ORDER if key in obs_dict]
             flat_obs = torch.cat(flat_parts, dim=-1)
             return flat_obs, xanchor
         else:
+            # obs_dict is already flat, return as-is
             return obs_dict, xanchor_tensor
 
     def evaluate():

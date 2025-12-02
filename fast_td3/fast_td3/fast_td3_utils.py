@@ -519,6 +519,11 @@ class DictEmpiricalNormalization(nn.Module):
             
         Returns:
             torch.Tensor: Flat observation tensor.
+            
+        Note:
+            Keys are sorted alphabetically to ensure consistent ordering.
+            The resulting flat tensor structure will be:
+            [key1_values, key2_values, ...] where keys are in sorted order.
         """
         parts = []
         for key in sorted(self.obs_shapes.keys()):

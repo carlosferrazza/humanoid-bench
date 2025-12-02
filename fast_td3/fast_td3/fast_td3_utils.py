@@ -1,5 +1,6 @@
 import os
 
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -441,6 +442,93 @@ class EmpiricalNormalization(nn.Module):
     @torch.jit.unused
     def inverse(self, y):
         return y * (self._std + self.eps) + self._mean
+
+
+class DictEmpiricalNormalization(nn.Module):
+    """
+    Normalize dict observations with separate normalizers for each feature type.
+    
+    This class applies EmpiricalNormalization to each feature type in the observation
+    dict, except for features specified in skip_keys (like xanchor).
+    """
+
+    def __init__(self, obs_shapes: dict, device, eps=1e-2, until=None, skip_keys=None):
+        """Initialize DictEmpiricalNormalization module.
+
+        Args:
+            obs_shapes (dict): Dictionary mapping observation keys to their shapes.
+                Example: {"pelvis_position": (3,), "joint_positions": (19,), ...}
+            device: Device to place the normalizers on.
+            eps (float): Small value for stability.
+            until (int or None): If specified, stop learning after this many samples.
+            skip_keys (list or None): List of keys to skip normalization (e.g., ["xanchor"]).
+        """
+        super().__init__()
+        self.obs_shapes = obs_shapes
+        self.device = device
+        self.eps = eps
+        self.until = until
+        self.skip_keys = skip_keys or ["xanchor"]
+        
+        # Create normalizers for each feature type
+        self.normalizers = nn.ModuleDict()
+        for key, shape in obs_shapes.items():
+            if key not in self.skip_keys:
+                self.normalizers[key] = EmpiricalNormalization(
+                    shape=shape, device=device, eps=eps, until=until
+                )
+
+    def forward(self, x: dict, center: bool = True) -> dict:
+        """
+        Normalize dict observations.
+        
+        Args:
+            x (dict): Dictionary of observation tensors.
+            center (bool): If True, subtract mean. If False, only scale by std.
+            
+        Returns:
+            dict: Normalized observations.
+        """
+        normalized = {}
+        for key, value in x.items():
+            if key in self.skip_keys:
+                # Skip normalization for these keys
+                normalized[key] = value
+            elif key in self.normalizers:
+                normalized[key] = self.normalizers[key](value, center=center)
+            else:
+                # Pass through unknown keys
+                normalized[key] = value
+        return normalized
+
+    def get_flat_obs_size(self):
+        """Get the size of the flattened observation (excluding skipped keys)."""
+        total = 0
+        for key, shape in self.obs_shapes.items():
+            if key not in self.skip_keys:
+                total += np.prod(shape)
+        return total
+
+    def to_flat(self, x: dict, include_skip_keys: bool = False) -> torch.Tensor:
+        """
+        Convert dict observations to a flat tensor.
+        
+        Args:
+            x (dict): Dictionary of observation tensors.
+            include_skip_keys (bool): If True, include skipped keys in the flat output.
+            
+        Returns:
+            torch.Tensor: Flat observation tensor.
+        """
+        parts = []
+        for key in sorted(self.obs_shapes.keys()):
+            if key not in self.skip_keys or include_skip_keys:
+                if key in x:
+                    value = x[key]
+                    if len(value.shape) > 2:
+                        value = value.reshape(value.shape[0], -1)
+                    parts.append(value)
+        return torch.cat(parts, dim=-1)
 
 
 def cpu_state(sd):

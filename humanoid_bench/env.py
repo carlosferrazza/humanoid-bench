@@ -42,6 +42,11 @@ from .envs.basic_locomotion_envs import (
     Slide,
     RunV2
 )
+from .envs.dict_observation_tasks import (
+    StandDict,
+    WalkDict,
+    RunDict,
+)
 from .envs.reach import Reach
 from .envs.pole import Pole
 from .envs.push import Push
@@ -99,6 +104,10 @@ TASKS = {
     "insert_small": Insert,  # This is not an error
     "powerlift": Powerlift,
     "runv2": RunV2,
+    # Dict observation tasks
+    "stand_dict": StandDict,
+    "walk_dict": WalkDict,
+    "run_dict": RunDict,
 }
 
 
@@ -127,7 +136,13 @@ class HumanoidEnv(MujocoEnv, gym.utils.EzPickle):
         if "model_path" in kwargs:
             model_path = kwargs["model_path"]
         else:
-            model_path = f"envs/{robot}_{control}_{task}.xml"
+            # Check if the task has a base_task_name for dict observation tasks
+            task_class = TASKS.get(task) if isinstance(task, str) else task
+            if hasattr(task_class, 'base_task_name') and task_class.base_task_name:
+                base_task = task_class.base_task_name
+                model_path = f"envs/{robot}_{control}_{base_task}.xml"
+            else:
+                model_path = f"envs/{robot}_{control}_{task}.xml"
         
         model_path = os.path.join(asset_path, model_path)
 

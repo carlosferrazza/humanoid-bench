@@ -25,9 +25,8 @@ from tensordict import TensorDict, from_module
 torch.autograd.set_detect_anomaly(True)
 torch.set_float32_matmul_precision("high")
 from fast_td3.fast_td3_utils import (
-    EmpiricalNormalization,
-    DictEmpiricalNormalization,
     SimpleReplayBufferGNN,
+    DictEmpiricalNormalization,
     save_params,
 )
 from fast_td3 import Critic
@@ -181,7 +180,7 @@ def main():
     )
 
     n_act = envs.num_actions
-    n_obs = envs.num_obs if type(envs.num_obs) == int else envs.num_obs[0]
+    n_obs = envs.num_obs
     if envs.asymmetric_obs:
         n_critic_obs = (
             envs.num_privileged_obs
@@ -210,12 +209,14 @@ def main():
         obs_normalizer = DictEmpiricalNormalization(
             obs_shapes=obs_shapes, 
             device=device,
-            skip_keys=["xanchor"]  # Don't normalize xanchor
+            skip_keys=["xanchor"]
         )
-        critic_obs_normalizer = EmpiricalNormalization(
-            shape=n_critic_obs, device=device
+        critic_obs_normalizer = DictEmpiricalNormalization(
+            obs_shapes=obs_shapes, 
+            device=device,
+            skip_keys=["xanchor"]
         )
-        xanchor_normalizer = nn.Identity()  # xanchor is not normalized
+        xanchor_normalizer = nn.Identity()
     else:
         obs_normalizer = nn.Identity()
         critic_obs_normalizer = nn.Identity()

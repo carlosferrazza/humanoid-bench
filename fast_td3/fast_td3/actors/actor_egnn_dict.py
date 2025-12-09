@@ -90,21 +90,28 @@ class ActorEGNNDict(nn.Module):
                 - joint_velocities: (batch, 19)
                 
         Returns:
-            flat_obs: (batch, 51) tensor in the format expected by EGNN:
-                [pelvis_position(3), pelvis_quaternion(4), joint_positions(19),
-                 pelvis_linear_velocity(3), pelvis_angular_velocity(3), joint_velocities(19)]
+            flat_obs: (batch, 51) tensor in the format expected by EGNN's generate_input:
+                obs[:, 0:3] = pelvis_position
+                obs[:, 3:7] = pelvis_quaternion
+                obs[:, 7:26] = joint_positions
+                obs[:, 26:29] = pelvis_linear_velocity
+                obs[:, 29:32] = pelvis_angular_velocity
+                obs[:, 32:51] = joint_velocities
         """
-        # Extract features in the order expected by EGNN's generate_input
-        # Format: [pelvis_pos(3), pelvis_quat(4), joint_pos(19), 
-        #          pelvis_lin_vel(3), pelvis_ang_vel(3), joint_vel(19)]
+        # Validate required keys
+        required_keys = ['pelvis_position', 'pelvis_quaternion', 'pelvis_linear_velocity',
+                        'pelvis_angular_velocity', 'joint_positions', 'joint_velocities']
+        missing_keys = [key for key in required_keys if key not in obs_dict]
+        if missing_keys:
+            raise ValueError(f"Missing required observation keys: {missing_keys}")
         
         batch_size = obs_dict['pelvis_position'].shape[0]
         
-        # Use pre-allocated tensor to avoid dynamic allocation
-        # Total size: 3 + 4 + 19 + 3 + 3 + 19 = 51
+        # Pre-allocate tensor (total size: 3 + 4 + 19 + 3 + 3 + 19 = 51)
+        # Use fixed indexing to avoid dynamic allocation
         flat_obs = torch.empty(batch_size, 51, device=self.device, dtype=obs_dict['pelvis_position'].dtype)
         
-        # Fill in the tensor (fixed indexing, no dynamic operations)
+        # Fill in the tensor following EGNN's expected format
         flat_obs[:, 0:3] = obs_dict['pelvis_position']
         flat_obs[:, 3:7] = obs_dict['pelvis_quaternion']
         flat_obs[:, 7:26] = obs_dict['joint_positions']

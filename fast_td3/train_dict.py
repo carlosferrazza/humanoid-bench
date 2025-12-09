@@ -359,11 +359,24 @@ def main():
             xanchor = obs_dict.get('xanchor', xanchor_tensor)
             
             # Create flat observation by concatenating fields in fixed order
-            # This order must match the expected input format for the actor/critic
+            # This order MUST match the expected input format for EGNN's generate_input:
+            # obs[:, 0:3] = pelvis_position
+            # obs[:, 3:7] = pelvis_quaternion
+            # obs[:, 7:26] = joint_positions
+            # obs[:, 26:29] = pelvis_linear_velocity
+            # obs[:, 29:32] = pelvis_angular_velocity
+            # obs[:, 32:51] = joint_velocities
             OBS_KEYS_ORDER = ['pelvis_position', 'pelvis_quaternion', 
+                              'joint_positions',
                               'pelvis_linear_velocity', 'pelvis_angular_velocity',
-                              'joint_positions', 'joint_velocities']
-            flat_parts = [obs_dict[key] for key in OBS_KEYS_ORDER if key in obs_dict]
+                              'joint_velocities']
+            
+            # Validate all required keys are present
+            missing_keys = [key for key in OBS_KEYS_ORDER if key not in obs_dict]
+            if missing_keys:
+                raise ValueError(f"Missing required observation keys: {missing_keys}")
+            
+            flat_parts = [obs_dict[key] for key in OBS_KEYS_ORDER]
             flat_obs = torch.cat(flat_parts, dim=-1)
             return flat_obs, xanchor
         else:

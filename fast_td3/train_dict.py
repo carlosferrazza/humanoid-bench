@@ -26,6 +26,7 @@ torch.autograd.set_detect_anomaly(True)
 torch.set_float32_matmul_precision("high")
 from fast_td3.fast_td3_utils import (
     EmpiricalNormalization,
+    DictEmpiricalNormalization,
     SimpleReplayBufferGNN,
     save_params,
 )
@@ -191,15 +192,26 @@ def main():
         n_critic_obs = n_obs
     action_low, action_high = -1.0, 1.0
 
-    # Observation shapes for reference (dict format from HumanoidBenchDictEnv):
-    # pelvis_position: (3,), pelvis_quaternion: (4,), pelvis_linear_velocity: (3,),
-    # pelvis_angular_velocity: (3,), joint_positions: (19,), joint_velocities: (19,)
-    # xanchor: (20, 3) - not included in flat obs, handled separately
+    # Define observation shapes for dict-based normalization
+    # These shapes match the dict observation format from HumanoidBenchDictEnv
+    obs_shapes = {
+        "pelvis_position": (3,),
+        "pelvis_quaternion": (4,),
+        "pelvis_linear_velocity": (3,),
+        "pelvis_angular_velocity": (3,),
+        "joint_positions": (19,),  # For H1 robot
+        "joint_velocities": (19,),  # For H1 robot
+        "xanchor": (20, 3),  # xanchor is not normalized
+    }
 
     if args.obs_normalization:
-        # Use standard EmpiricalNormalization for flat observations
-        # Dict observations are converted to flat before storage and normalization
-        obs_normalizer = EmpiricalNormalization(shape=n_obs, device=device)
+        # Use DictEmpiricalNormalization for dict observations
+        # This normalizes each feature type separately
+        obs_normalizer = DictEmpiricalNormalization(
+            obs_shapes=obs_shapes, 
+            device=device,
+            skip_keys=["xanchor"]  # Don't normalize xanchor
+        )
         critic_obs_normalizer = EmpiricalNormalization(
             shape=n_critic_obs, device=device
         )
@@ -209,9 +221,19 @@ def main():
         critic_obs_normalizer = nn.Identity()
         xanchor_normalizer = nn.Identity()
 
-    # For dict observations, we normalize the flat version
-    # The dict structure is preserved separately for the actor to use flexibly
-    normalize_obs = obs_normalizer.forward
+    def normalize_obs(obs):
+        """Normalize dict observations using DictEmpiricalNormalization."""
+        if isinstance(obs_normalizer, nn.Identity):
+            # No normalization
+            return obs
+        elif isinstance(obs, dict):
+            # Dict observation - use DictEmpiricalNormalization
+            return obs_normalizer(obs)
+        else:
+            # Flat observation - this shouldn't happen in dict env, but handle it gracefully
+            # Just return as-is since we can't normalize flat obs with DictEmpiricalNormalization
+            return obs
+    
     normalize_critic_obs = critic_obs_normalizer.forward
     normalize_xanchor = xanchor_normalizer.forward
 
@@ -720,14 +742,22 @@ def main():
         # TRANSITION DATA PREPARATION
         # Handle episode boundaries correctly - use 'raw' observations for terminal states
         # This ensures we store the actual final state, not the auto-reset state
-        # Convert dict observations to flat for storage
-        flat_obs, _ = get_flat_obs_and_xanchor(obs, xanchor)
-        flat_next_obs, _ = get_flat_obs_and_xanchor(next_obs, next_xanchor)
+        
+        # Normalize dict observations BEFORE converting to flat
+        # This allows DictEmpiricalNormalization to work on each feature separately
+        norm_obs = normalize_obs(obs)
+        norm_next_obs = normalize_obs(next_obs)
+        
+        # Convert normalized dict observations to flat for storage
+        flat_obs, _ = get_flat_obs_and_xanchor(norm_obs, xanchor)
+        flat_next_obs, _ = get_flat_obs_and_xanchor(norm_next_obs, next_xanchor)
         
         raw_obs = infos["observations"]["raw"]["obs"]
         if isinstance(raw_obs, dict):
-            flat_raw_obs, _ = get_flat_obs_and_xanchor(raw_obs, xanchor)
+            norm_raw_obs = normalize_obs(raw_obs)
+            flat_raw_obs, _ = get_flat_obs_and_xanchor(norm_raw_obs, xanchor)
         else:
+            # raw_obs is already flat, just use it as-is
             flat_raw_obs = raw_obs
             
         true_next_obs = torch.where(
@@ -783,11 +813,9 @@ def main():
                 # Sample a batch of transitions from replay buffer
                 data = rb.sample(batch_size)
 
-                # Normalize observations for stable training
-                data["observations"] = normalize_obs(data["observations"])
-                data["next"]["observations"] = normalize_obs(
-                    data["next"]["observations"]
-                )
+                # Observations are already normalized when stored in replay buffer
+                # No need to normalize again here
+                # Only normalize xanchors which are stored unnormalized
                 data["xanchors"] = normalize_xanchor(data["xanchors"])
                 data["next"]["xanchors"] = normalize_xanchor(data["next"]["xanchors"])
                 if envs.asymmetric_obs:

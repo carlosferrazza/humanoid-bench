@@ -200,9 +200,9 @@ def main():
         "pelvis_quaternion": (4,),
         "pelvis_linear_velocity": (3,),
         "pelvis_angular_velocity": (3,),
-        "joint_positions": (19,),  # For H1 robot
-        "joint_velocities": (19,),  # For H1 robot
-        "joint_x": (20, 3),  # joint_x is not normalized
+        "joint_positions": (19,),  # For H1 robot - 19 body joints
+        "joint_velocities": (19,),  # For H1 robot - 19 body joints
+        "joint_x": (20, 3),  # For H1 robot - 20 joint anchors (3D coordinates), not normalized
     }
 
     if args.obs_normalization:
@@ -717,16 +717,17 @@ def main():
         with torch.no_grad(), autocast(
             device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled
         ):
-            # obs from env is already a dict containing joint_x
+            # obs and joint_x from env are flat vectors
+            # Unflatten and normalize observations
             norm_obs_dict = normalize_obs(obs, joint_x)
             
             # For egnn_dict actor, pass normalized dict observations directly (includes joint_x)
             if terminal_args["actor"] == "egnn_dict":
                 actions = policy(obs=norm_obs_dict, joint_x_param=None, dones=dones)
             else:
-                # For standard egnn/mlp actors, flatten observations and extract joint_x separately
+                # For standard egnn/mlp actors, use flat obs and joint_x separately
                 # Using flat obs and joint_x from environment
-                actions = policy(obs=flat_norm_obs, xanchor=joint_x, dones=dones)
+                actions = policy(obs=obs, xanchor=joint_x, dones=dones)
 
         # ENVIRONMENT INTERACTION PHASE
         # Take actions in the environment and collect transition data

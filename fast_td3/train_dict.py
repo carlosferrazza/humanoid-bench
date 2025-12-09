@@ -743,8 +743,13 @@ def main():
         # Handle episode boundaries correctly - use 'raw' observations for terminal states
         # This ensures we store the actual final state, not the auto-reset state
         
-        # Normalize dict observations BEFORE converting to flat
+        # Normalize dict observations BEFORE converting to flat for replay buffer storage
         # This allows DictEmpiricalNormalization to work on each feature separately
+        # NOTE: This is different from the original train.py where normalization happens
+        # at sampling time. Here we normalize at storage time because:
+        # 1. DictEmpiricalNormalization requires dict structure
+        # 2. Replay buffer stores flat observations for efficiency
+        # 3. Normalizer statistics are updated during environment interaction (online learning)
         norm_obs = normalize_obs(obs)
         norm_next_obs = normalize_obs(next_obs)
         

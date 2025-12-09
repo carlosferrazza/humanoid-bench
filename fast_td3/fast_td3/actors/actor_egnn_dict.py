@@ -124,28 +124,33 @@ class ActorEGNNDict(nn.Module):
         
         return flat_obs
 
-    def forward(self, obs) -> torch.Tensor:
+    def forward(self, obs, joint_x_param=None) -> torch.Tensor:
         """
         Forward pass with observations.
         
         Args:
-            obs: Dict of normalized observations including 'joint_x'
+            obs: Dict of normalized observations (including 'joint_x') OR flat tensor
+            joint_x_param: joint_x tensor (only used if obs is flat tensor)
             
         Returns:
             actions: (batch, num_joints) tensor
         """
-        # Obs must be a dict with joint_x inside
-        if not isinstance(obs, dict):
-            raise ValueError("ActorEGNNDict requires dict observations, got tensor")
-        
-        if 'joint_x' not in obs:
-            raise ValueError("Observation dict must contain 'joint_x' key")
-        
-        # Extract joint_x from dict
-        joint_x = obs['joint_x']
-        
-        # Convert dict to flat obs for EGNN (excluding joint_x)
-        flat_obs = self.dict_to_flat_obs(obs)
+        if isinstance(obs, dict):
+            # Dict observation - joint_x must be in the dict
+            if 'joint_x' not in obs:
+                raise ValueError("Observation dict must contain 'joint_x' key")
+            
+            # Extract joint_x from dict
+            joint_x = obs['joint_x']
+            
+            # Convert dict to flat obs for EGNN (excluding joint_x)
+            flat_obs = self.dict_to_flat_obs(obs)
+        else:
+            # Flat observation - use separate joint_x parameter
+            if joint_x_param is None:
+                raise ValueError("When obs is flat tensor, joint_x_param must be provided")
+            flat_obs = obs
+            joint_x = joint_x_param
         
         # Pass to EGNN
         result = self.egnn(flat_obs, joint_x)
@@ -155,6 +160,7 @@ class ActorEGNNDict(nn.Module):
     def explore(
         self, 
         obs,
+        joint_x_param=None,
         dones: torch.Tensor = None, 
         deterministic: bool = False
     ) -> torch.Tensor:
@@ -162,7 +168,8 @@ class ActorEGNNDict(nn.Module):
         Exploration policy with observations.
         
         Args:
-            obs: Dict of normalized observations including 'joint_x'
+            obs: Dict of normalized observations (including 'joint_x') OR flat tensor
+            joint_x_param: joint_x tensor (only used if obs is flat tensor)
             dones: (batch,) boolean tensor indicating done episodes
             deterministic: If True, return deterministic actions without noise
             
@@ -183,7 +190,7 @@ class ActorEGNNDict(nn.Module):
             self.noise_scales = torch.where(dones_view, new_scales, self.noise_scales)
 
         # Get deterministic action
-        act = self(obs)
+        act = self(obs, joint_x_param)
         
         if deterministic:
             return act

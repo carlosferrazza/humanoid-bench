@@ -162,15 +162,14 @@ class HumanoidBenchDictEnv:
         # Convert to tensors
         if isinstance(observations, dict):
             tensor_obs = self._convert_obs_to_tensor(observations)
-            # xanchor is already in the dict, but also returned separately for compatibility
-            xanchor = torch.from_numpy(xanchor).to(device=self.sim_device, dtype=torch.float)
+            # joint_x is already in the dict, no need to return separately
         else:
             tensor_obs = torch.from_numpy(observations).to(
                 device=self.sim_device, dtype=torch.float
             )
-            xanchor = torch.from_numpy(xanchor).to(device=self.sim_device, dtype=torch.float)
+            # For non-dict obs, we'd need to add joint_x, but this shouldn't happen for dict envs
 
-        return tensor_obs, xanchor
+        return tensor_obs
 
     def render(self):
         assert (
@@ -221,7 +220,7 @@ class HumanoidBenchDictEnv:
                 infos["observations"]["raw"]["obs"]
             ).to(device=self.sim_device, dtype=torch.float)
 
-        xanchor = torch.from_numpy(xanchor).to(device=self.sim_device, dtype=torch.float)
+        # Note: joint_x (formerly xanchor) is already in the dict, no need to return separately
         rewards = torch.from_numpy(rewards).to(
             device=self.sim_device, dtype=torch.float
         )
@@ -229,7 +228,7 @@ class HumanoidBenchDictEnv:
         truncateds = torch.from_numpy(truncateds).to(device=self.sim_device)
         infos["time_outs"] = truncateds
 
-        return tensor_obs, rewards, dones, infos, xanchor
+        return tensor_obs, rewards, dones, infos, None  # Last return value is None for compatibility
 
     def obs_to_flat(self, observations):
         """
@@ -240,12 +239,12 @@ class HumanoidBenchDictEnv:
             observations: Dict of observation tensors
             
         Returns:
-            Flat observation tensor (excluding xanchor)
+            Flat observation tensor (excluding joint_x)
         """
         if isinstance(observations, dict):
             flat_parts = []
             for key in self.OBS_KEYS:
-                if key != 'xanchor' and key in observations:
+                if key != 'joint_x' and key in observations:
                     obs = observations[key]
                     if len(obs.shape) > 2:
                         # Flatten multi-dimensional observations

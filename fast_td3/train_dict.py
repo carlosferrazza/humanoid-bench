@@ -496,17 +496,17 @@ def main():
             device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled
         ):
             # Extract transition data from replay buffer
-            observations = data["observations"]
-            next_observations = data["next"]["observations"]
-            xanchor = data["xanchors"]
-            next_xanchor = data["next"]["xanchors"]
+            flat_observations = data["observations"]
+            flat_next_observations = data["next"]["observations"]
+            joint_x = data["xanchors"]  # Stored as "xanchors" for replay buffer compatibility
+            next_joint_x = data["next"]["xanchors"]
 
             if envs.asymmetric_obs:
                 critic_observations = data["critic_observations"]
                 next_critic_observations = data["next"]["critic_observations"]
             else:
-                critic_observations = observations
-                next_critic_observations = next_observations
+                critic_observations = flat_observations
+                next_critic_observations = flat_next_observations
 
             actions = data["actions"]
             rewards = data["next"]["rewards"]
@@ -526,9 +526,18 @@ def main():
                 -noise_clip, noise_clip
             )
 
-            next_state_actions = (
-                actor(next_observations, next_xanchor) + clipped_noise
-            ).clamp(action_low, action_high)
+            # Get next actions from actor
+            # For egnn_dict, actor needs dict observations
+            if terminal_args["actor"] == "egnn_dict":
+                # Reconstruct dict obs for actor (this is temporary until we fully migrate)
+                # For now, actor can handle flat obs + joint_x too
+                next_state_actions = (
+                    actor(flat_next_observations, next_joint_x) + clipped_noise
+                ).clamp(action_low, action_high)
+            else:
+                next_state_actions = (
+                    actor(flat_next_observations, next_joint_x) + clipped_noise
+                ).clamp(action_low, action_high)
 
             # Compute target Q-values using target networks (no gradients)
             with torch.no_grad():
@@ -613,17 +622,21 @@ def main():
         with autocast(
             device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled
         ):
+            # Extract observations and joint_x from replay buffer data
+            flat_observations = data["observations"]
+            joint_x = data["xanchors"]  # Stored as "xanchors" for compatibility
+            
             # Use appropriate observations based on environment setup
             critic_observations = (
                 data["critic_observations"]
                 if envs.asymmetric_obs
-                else data["observations"]
+                else flat_observations
             )
 
             # Compute Q-values for current states with actions from the main actor
             # Note: This uses the main 'actor' network, not 'actor_detach'
             qf1, qf2 = qnet(
-                critic_observations, actor(data["observations"], data["xanchors"])
+                critic_observations, actor(flat_observations, joint_x)
             )
 
             # Convert distributional Q-values to scalar estimates
@@ -664,7 +677,6 @@ def main():
         policy = torch.compile(policy, mode=mode)
         normalize_obs = torch.compile(normalize_obs, mode=mode)
         normalize_critic_obs = torch.compile(normalize_critic_obs, mode=mode)
-        normalize_xanchor = torch.compile(normalize_xanchor, mode=mode)
 
     def frames_to_video_html(frames, fps=30):
         """
@@ -717,7 +729,7 @@ def main():
         obs, critic_obs = envs.reset_with_critic_obs()
         critic_obs = torch.as_tensor(critic_obs, device=device, dtype=torch.float)
     else:
-        obs, xanchor = envs.reset()
+        obs = envs.reset()  # obs is a dict containing joint_x
     pbar = tqdm.tqdm(total=args.total_timesteps, initial=global_step)
     dones = None
 
@@ -730,27 +742,21 @@ def main():
         with torch.no_grad(), autocast(
             device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled
         ):
-            if isinstance(obs, tuple):
-                obs, xanchor = obs
-
+            # obs from env is already a dict containing joint_x
             norm_obs = normalize_obs(obs)
             
-            # For egnn_dict actor, pass normalized dict observations directly
-            # For egnn/mlp actors, flatten observations first
+            # For egnn_dict actor, pass normalized dict observations directly (includes joint_x)
             if terminal_args["actor"] == "egnn_dict":
-                # Add xanchor to normalized dict for egnn_dict actor
-                norm_obs['xanchor'] = normalize_xanchor(xanchor)
-                actions = policy(obs=norm_obs, xanchor=None, dones=dones)
+                actions = policy(obs=norm_obs, joint_x_param=None, dones=dones)
             else:
-                # Flatten observations for standard egnn/mlp actors
-                flat_norm_obs, norm_xanchor = get_flat_obs_and_xanchor(norm_obs, xanchor)
-                norm_xanchor = normalize_xanchor(norm_xanchor)
-                actions = policy(obs=flat_norm_obs, xanchor=norm_xanchor, dones=dones)
-
+                # For standard egnn/mlp actors, flatten observations and extract joint_x separately
+                flat_norm_obs = get_flat_obs(norm_obs)
+                joint_x = norm_obs['joint_x']
+                actions = policy(obs=flat_norm_obs, xanchor=joint_x, dones=dones)
 
         # ENVIRONMENT INTERACTION PHASE
         # Take actions in the environment and collect transition data
-        next_obs, rewards, dones, infos, next_xanchor = envs.step(actions.float())
+        next_obs, rewards, dones, infos, _ = envs.step(actions.float())
         truncations = infos["time_outs"]  # Episodes ended due to time limits
 
         # Extract privileged observations for critic if using asymmetric observations
@@ -772,13 +778,16 @@ def main():
         norm_next_obs = normalize_obs(next_obs)
         
         # Convert normalized dict observations to flat for storage
-        flat_obs, _ = get_flat_obs_and_xanchor(norm_obs, xanchor)
-        flat_next_obs, _ = get_flat_obs_and_xanchor(norm_next_obs, next_xanchor)
+        # Extract joint_x separately for replay buffer
+        flat_obs = get_flat_obs(norm_obs)
+        flat_next_obs = get_flat_obs(norm_next_obs)
+        joint_x = norm_obs['joint_x']
+        next_joint_x = norm_next_obs['joint_x']
         
         raw_obs = infos["observations"]["raw"]["obs"]
         if isinstance(raw_obs, dict):
             norm_raw_obs = normalize_obs(raw_obs)
-            flat_raw_obs, _ = get_flat_obs_and_xanchor(norm_raw_obs, xanchor)
+            flat_raw_obs = get_flat_obs(norm_raw_obs)
         else:
             # raw_obs is already flat, just use it as-is
             flat_raw_obs = raw_obs
@@ -797,11 +806,11 @@ def main():
         transition = TensorDict(
             {
                 "observations": flat_obs,
-                "xanchors": xanchor,
+                "xanchors": joint_x,  # Storing as 'xanchors' for replay buffer compatibility
                 "actions": torch.as_tensor(actions, device=device, dtype=torch.float),
                 "next": {
                     "observations": true_next_obs,
-                    "xanchors": next_xanchor,
+                    "xanchors": next_joint_x,
                     "rewards": torch.as_tensor(
                         rewards, device=device, dtype=torch.float
                     ),
@@ -819,7 +828,6 @@ def main():
 
         # UPDATE OBSERVATIONS FOR NEXT ITERATION
         obs = next_obs
-        xanchor = next_xanchor
         if envs.asymmetric_obs:
             critic_obs = next_critic_obs
 
@@ -837,10 +845,8 @@ def main():
                 data = rb.sample(batch_size)
 
                 # Observations are already normalized when stored in replay buffer
-                # No need to normalize again here
-                # Only normalize xanchors which are stored unnormalized
-                data["xanchors"] = normalize_xanchor(data["xanchors"])
-                data["next"]["xanchors"] = normalize_xanchor(data["next"]["xanchors"])
+                # joint_x (stored as "xanchors" for compatibility) is also already in the data
+                # No need to normalize anything here
                 if envs.asymmetric_obs:
                     data["critic_observations"] = normalize_critic_obs(
                         data["critic_observations"]
@@ -951,7 +957,6 @@ def main():
                     qnet,
                     qnet_target,
                     obs_normalizer,
-                    xanchor_normalizer,
                     critic_obs_normalizer,
                     args,
                     f"models/{run_name}_{global_step}.pt",
@@ -966,7 +971,6 @@ def main():
         qnet,
         qnet_target,
         obs_normalizer,
-        xanchor_normalizer,
         critic_obs_normalizer,
         args,
         f"models/{run_name}_final.pt",

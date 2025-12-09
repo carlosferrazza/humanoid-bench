@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from fast_td3.actors.gnn.egnn import EGNN
+from fast_td3.actors.gnn.egnn_dict import EGNN_dict
 
 
 class ActorEGNNDict(nn.Module):
@@ -54,7 +54,7 @@ class ActorEGNNDict(nn.Module):
                 raise ValueError(f"Unknown activation function: {act_fn}")
 
         # EGNN for message passing (same as ActorEGNN)
-        self.egnn = EGNN(
+        self.egnn = EGNN_dict(
             hidden_nf=hidden_dim,
             in_node_nf=2,
             in_edge_nf=0,
@@ -79,103 +79,16 @@ class ActorEGNNDict(nn.Module):
         self.register_buffer("std_min", torch.as_tensor(std_min, device=device))
         self.register_buffer("std_max", torch.as_tensor(std_max, device=device))
 
-    def dict_to_flat_obs(self, obs_dict: dict) -> torch.Tensor:
-        """
-        Convert dict observations to flat tensor expected by EGNN.
+    def forward(self, obs: dict) -> torch.Tensor:
         
-        Args:
-            obs_dict: Dictionary with keys:
-                - pelvis_position: (batch, 3)
-                - pelvis_quaternion: (batch, 4)
-                - pelvis_linear_velocity: (batch, 3)
-                - pelvis_angular_velocity: (batch, 3)
-                - joint_positions: (batch, 19)
-                - joint_velocities: (batch, 19)
-                
-        Returns:
-            flat_obs: (batch, 51) tensor in the format expected by EGNN's generate_input:
-                obs[:, 0:3] = pelvis_position
-                obs[:, 3:7] = pelvis_quaternion
-                obs[:, 7:26] = joint_positions
-                obs[:, 26:29] = pelvis_linear_velocity
-                obs[:, 29:32] = pelvis_angular_velocity
-                obs[:, 32:51] = joint_velocities
-        """
-        # Validate required keys
-        required_keys = ['pelvis_position', 'pelvis_quaternion', 'pelvis_linear_velocity',
-                        'pelvis_angular_velocity', 'joint_positions', 'joint_velocities']
-        missing_keys = [key for key in required_keys if key not in obs_dict]
-        if missing_keys:
-            raise ValueError(f"Missing required observation keys: {missing_keys}")
-        
-        batch_size = obs_dict['pelvis_position'].shape[0]
-        
-        # Pre-allocate tensor (total size: 3 + 4 + 19 + 3 + 3 + 19 = 51)
-        # Use fixed indexing to avoid dynamic allocation
-        flat_obs = torch.empty(batch_size, 51, device=self.device, dtype=obs_dict['pelvis_position'].dtype)
-        
-        # Fill in the tensor following EGNN's expected format
-        flat_obs[:, 0:3] = obs_dict['pelvis_position']
-        flat_obs[:, 3:7] = obs_dict['pelvis_quaternion']
-        flat_obs[:, 7:26] = obs_dict['joint_positions']
-        flat_obs[:, 26:29] = obs_dict['pelvis_linear_velocity']
-        flat_obs[:, 29:32] = obs_dict['pelvis_angular_velocity']
-        flat_obs[:, 32:51] = obs_dict['joint_velocities']
-        
-        return flat_obs
-
-    def forward(self, obs, joint_x_param=None) -> torch.Tensor:
-        """
-        Forward pass with observations.
-        
-        Args:
-            obs: Dict of normalized observations (including 'joint_x') OR flat tensor
-            joint_x_param: joint_x tensor (only used if obs is flat tensor)
-            
-        Returns:
-            actions: (batch, num_joints) tensor
-        """
-        if isinstance(obs, dict):
-            # Dict observation - joint_x must be in the dict
-            if 'joint_x' not in obs:
-                raise ValueError("Observation dict must contain 'joint_x' key")
-            
-            # Extract joint_x from dict
-            joint_x = obs['joint_x']
-            
-            # Convert dict to flat obs for EGNN (excluding joint_x)
-            flat_obs = self.dict_to_flat_obs(obs)
-        else:
-            # Flat observation - use separate joint_x parameter
-            if joint_x_param is None:
-                raise ValueError("When obs is flat tensor, joint_x_param must be provided")
-            flat_obs = obs
-            joint_x = joint_x_param
-        
-        # Pass to EGNN
-        result = self.egnn(flat_obs, joint_x)
-        
-        return result
+        return self.egnn(obs)
 
     def explore(
         self, 
-        obs,
-        joint_x_param=None,
+        obs: dict,
         dones: torch.Tensor = None, 
         deterministic: bool = False
     ) -> torch.Tensor:
-        """
-        Exploration policy with observations.
-        
-        Args:
-            obs: Dict of normalized observations (including 'joint_x') OR flat tensor
-            joint_x_param: joint_x tensor (only used if obs is flat tensor)
-            dones: (batch,) boolean tensor indicating done episodes
-            deterministic: If True, return deterministic actions without noise
-            
-        Returns:
-            actions: (batch, num_joints) tensor with exploration noise
-        """
         # If dones is provided, resample noise for environments that are done
         if dones is not None and dones.sum() > 0:
             # Generate new noise scales for done environments
@@ -190,7 +103,7 @@ class ActorEGNNDict(nn.Module):
             self.noise_scales = torch.where(dones_view, new_scales, self.noise_scales)
 
         # Get deterministic action
-        act = self(obs, joint_x_param)
+        act = self(obs)
         
         if deterministic:
             return act

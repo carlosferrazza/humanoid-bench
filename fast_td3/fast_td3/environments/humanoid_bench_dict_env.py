@@ -157,7 +157,7 @@ class HumanoidBenchDictEnv:
 
     def reset(self):
         """Reset the environment and return dict observations."""
-        observations, xanchor = self.envs.reset()
+        observations, _ = self.envs.reset()
         
         # Convert to tensors
         if isinstance(observations, dict):

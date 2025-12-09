@@ -200,7 +200,7 @@ def main():
         "pelvis_angular_velocity": (3,),
         "joint_positions": (19,),  # For H1 robot
         "joint_velocities": (19,),  # For H1 robot
-        "joint_x": (20, 3),  # joint_x is not normalized
+        "joint_x": (19, 3),  # joint_x is not normalized
     }
 
     obs_flat_dim = 0
@@ -277,7 +277,7 @@ def main():
 
     # critic
     qnet = Critic(
-        n_obs=n_critic_obs,
+        n_obs=obs_flat_dim,
         n_act=n_act,
         num_atoms=args.num_atoms,
         v_min=args.v_min,
@@ -287,7 +287,7 @@ def main():
     )
 
     qnet_target = Critic(
-        n_obs=n_critic_obs,
+        n_obs=obs_flat_dim,
         n_act=n_act,
         num_atoms=args.num_atoms,
         v_min=args.v_min,
@@ -344,28 +344,20 @@ def main():
         Convert dict observations to flat tensor for storage in replay buffer.
         
         Args:
-            obs_dict: Dict observation (must be a dict for dict env)
+            obs_dict: Dict observation (must be a dict or dict-like for dict env)
             
         Returns:
-            flat_obs: Flattened observation tensor (excludes joint_x which stays in dict)
+            flat_obs: Flattened observation tensor
             
         Note: The flat observation is created by concatenating fields in a fixed order:
-        pelvis_position, pelvis_quaternion, joint_positions,
-        pelvis_linear_velocity, pelvis_angular_velocity, joint_velocities
-        
-        joint_x is NOT included in the flat observation - it remains in the dict.
+        pelvis_position, pelvis_quaternion, pelvis_linear_velocity, 
+        pelvis_angular_velocity, joint_positions, joint_velocities, joint_x
         """
-        if not isinstance(obs_dict, dict):
-            raise ValueError("get_flat_obs expects dict observations")
+        # Handle both regular dict and TensorDict
+        if not (isinstance(obs_dict, dict) or hasattr(obs_dict, '__getitem__')):
+            raise ValueError("get_flat_obs expects dict or dict-like observations")
         
         # Create flat observation by concatenating fields in fixed order
-        # This order MUST match the expected input format for EGNN's generate_input:
-        # obs[:, 0:3] = pelvis_position
-        # obs[:, 3:7] = pelvis_quaternion
-        # obs[:, 7:26] = joint_positions
-        # obs[:, 26:29] = pelvis_linear_velocity
-        # obs[:, 29:32] = pelvis_angular_velocity
-        # obs[:, 32:51] = joint_velocities
         OBS_KEYS_ORDER = ['pelvis_position', 'pelvis_quaternion', 
                           'pelvis_linear_velocity', 'pelvis_angular_velocity',
                           'joint_positions',
@@ -380,6 +372,57 @@ def main():
         flat_parts = [obs_dict[key] if key != "joint_x" else obs_dict[key].view(obs_dict[key].shape[0], -1) for key in OBS_KEYS_ORDER]
         flat_obs = torch.cat(flat_parts, dim=-1)
         return flat_obs
+
+    def unflatten_obs(flat_obs_tensor):
+        """
+        Convert flat tensor observations back to dict format for use with the actor.
+        
+        Args:
+            flat_obs_tensor: Flattened observation tensor of shape (batch_size, total_dim)
+            
+        Returns:
+            obs_dict: Dict observation with keys: pelvis_position, pelvis_quaternion, 
+                     pelvis_linear_velocity, pelvis_angular_velocity, joint_positions, 
+                     joint_velocities, joint_x
+        """
+        if not isinstance(flat_obs_tensor, torch.Tensor):
+            raise ValueError("unflatten_obs expects torch.Tensor")
+        
+        batch_size = flat_obs_tensor.shape[0]
+        
+        # Define the slices for each component
+        obs_dict = {}
+        idx = 0
+        
+        # pelvis_position: (3,)
+        obs_dict['pelvis_position'] = flat_obs_tensor[:, idx:idx+3]
+        idx += 3
+        
+        # pelvis_quaternion: (4,)
+        obs_dict['pelvis_quaternion'] = flat_obs_tensor[:, idx:idx+4]
+        idx += 4
+        
+        # pelvis_linear_velocity: (3,)
+        obs_dict['pelvis_linear_velocity'] = flat_obs_tensor[:, idx:idx+3]
+        idx += 3
+        
+        # pelvis_angular_velocity: (3,)
+        obs_dict['pelvis_angular_velocity'] = flat_obs_tensor[:, idx:idx+3]
+        idx += 3
+        
+        # joint_positions: (19,)
+        obs_dict['joint_positions'] = flat_obs_tensor[:, idx:idx+19]
+        idx += 19
+        
+        # joint_velocities: (19,)
+        obs_dict['joint_velocities'] = flat_obs_tensor[:, idx:idx+19]
+        idx += 19
+        
+        # joint_x: (19, 3)
+        joint_x_flat = flat_obs_tensor[:, idx:idx+57]  # 19*3=57
+        obs_dict['joint_x'] = joint_x_flat.view(batch_size, 19, 3)
+        
+        return obs_dict
 
     def evaluate():
         """
@@ -506,17 +549,17 @@ def main():
             device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled
         ):
             # Extract transition data from replay buffer
-            flat_observations = data["observations"]
-            flat_next_observations = data["next"]["observations"]
-            joint_x = data["xanchors"]  # Stored as "xanchors" for replay buffer compatibility
-            next_joint_x = data["next"]["xanchors"]
+            # observations are dict observations (not flattened)
+            observations = data["observations"]
+            next_observations = data["next"]["observations"]
 
             if envs.asymmetric_obs:
                 critic_observations = data["critic_observations"]
                 next_critic_observations = data["next"]["critic_observations"]
             else:
-                critic_observations = flat_observations
-                next_critic_observations = flat_next_observations
+                # Flatten dict observations for critic (critic expects flat tensors)
+                critic_observations = get_flat_obs(observations)
+                next_critic_observations = get_flat_obs(next_observations)
 
             actions = data["actions"]
             rewards = data["next"]["rewards"]
@@ -539,15 +582,12 @@ def main():
             # Get next actions from actor
             # For egnn_dict, actor needs dict observations
             if terminal_args["actor"] == "egnn_dict":
-                # Reconstruct dict obs for actor (this is temporary until we fully migrate)
-                # For now, actor can handle flat obs + joint_x too
+                # Actor receives dict observations directly (includes joint_x)
                 next_state_actions = (
-                    actor(flat_next_observations, next_joint_x) + clipped_noise
+                    actor(next_observations) + clipped_noise
                 ).clamp(action_low, action_high)
             else:
-                next_state_actions = (
-                    actor(flat_next_observations, next_joint_x) + clipped_noise
-                ).clamp(action_low, action_high)
+                raise NotImplementedError("Only egnn_dict actor is supported in this code.")
 
             # Compute target Q-values using target networks (no gradients)
             with torch.no_grad():
@@ -632,21 +672,22 @@ def main():
         with autocast(
             device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled
         ):
-            # Extract observations and joint_x from replay buffer data
-            flat_observations = data["observations"]
-            joint_x = data["xanchors"]  # Stored as "xanchors" for compatibility
+            # Extract observations from replay buffer data
+            # observations are dict observations (not flattened)
+            observations = data["observations"]
             
             # Use appropriate observations based on environment setup
-            critic_observations = (
-                data["critic_observations"]
-                if envs.asymmetric_obs
-                else flat_observations
-            )
+            if envs.asymmetric_obs:
+                critic_observations = data["critic_observations"]
+            else:
+                # Flatten dict observations for critic (critic expects flat tensors)
+                critic_observations = get_flat_obs(observations)
 
             # Compute Q-values for current states with actions from the main actor
             # Note: This uses the main 'actor' network, not 'actor_detach'
+            # Actor receives dict observations directly (includes joint_x)
             qf1, qf2 = qnet(
-                critic_observations, actor(flat_observations, joint_x)
+                critic_observations, actor(observations)
             )
 
             # Convert distributional Q-values to scalar estimates
@@ -757,7 +798,7 @@ def main():
             
             # For egnn_dict actor, pass normalized dict observations directly (includes joint_x)
             if terminal_args["actor"] == "egnn_dict":
-                actions = policy(obs=norm_obs, joint_x_param=None, dones=dones)
+                actions = policy(obs=norm_obs, dones=dones)
             else:
                 # For standard egnn/mlp actors, flatten observations and extract joint_x separately
                 flat_norm_obs = get_flat_obs(norm_obs)
@@ -773,28 +814,30 @@ def main():
         if envs.asymmetric_obs:
             next_critic_obs = infos["observations"]["critic"]
 
-        
+        # TRANSITION DATA PREPARATION
+        # Handle episode boundaries correctly - use 'raw' observations for terminal states
+        # This ensures we store the actual final state, not the auto-reset state
+        # For dict observations, apply torch.where() to each key individually
         norm_obs = normalize_obs(obs)
         norm_next_obs = normalize_obs(next_obs)
         
-        # Convert normalized dict observations to flat for storage
-        # Extract joint_x separately for replay buffer
-        flat_obs = get_flat_obs(norm_obs)
-        flat_next_obs = get_flat_obs(norm_next_obs)
-        joint_x = norm_obs['joint_x']
-        next_joint_x = norm_next_obs['joint_x']
-        
         raw_obs = infos["observations"]["raw"]["obs"]
-        if isinstance(raw_obs, dict):
-            norm_raw_obs = normalize_obs(raw_obs)
-            flat_raw_obs = get_flat_obs(norm_raw_obs)
-        else:
-            # raw_obs is already flat, just use it as-is
-            flat_raw_obs = raw_obs
-            
-        true_next_obs = torch.where(
-            dones[:, None] > 0, flat_raw_obs, flat_next_obs
-        )
+        norm_raw_obs = normalize_obs(raw_obs)
+        
+        # Apply torch.where to each dict key to handle terminal states correctly
+        true_next_obs = {}
+        for key in norm_next_obs.keys():
+            if dones.any():
+                # Reshape dones to match the observation shape for this key
+                obs_shape = norm_next_obs[key].shape
+                # Create a mask with the right shape: (batch_size, *obs_dims)
+                done_mask = dones.view(-1, *([1] * (len(obs_shape) - 1)))
+                true_next_obs[key] = torch.where(
+                    done_mask > 0, norm_raw_obs[key], norm_next_obs[key]
+                )
+            else:
+                true_next_obs[key] = norm_next_obs[key]
+        
         if envs.asymmetric_obs:
             true_next_critic_obs = torch.where(
                 dones[:, None] > 0,
@@ -803,14 +846,16 @@ def main():
             )
 
         # Create transition tuple (s, a, r, s', done, truncated) for replay buffer
+        # Flatten dict observations for replay buffer storage
+        flat_norm_obs = get_flat_obs(norm_obs)
+        flat_true_next_obs = get_flat_obs(true_next_obs)
+        
         transition = TensorDict(
             {
-                "observations": flat_obs,
-                "xanchors": joint_x,  # Storing as 'xanchors' for replay buffer compatibility
+                "observations": flat_norm_obs,
                 "actions": torch.as_tensor(actions, device=device, dtype=torch.float),
                 "next": {
-                    "observations": true_next_obs,
-                    "xanchors": next_joint_x,
+                    "observations": flat_true_next_obs,
                     "rewards": torch.as_tensor(
                         rewards, device=device, dtype=torch.float
                     ),
@@ -844,8 +889,11 @@ def main():
                 # Sample a batch of transitions from replay buffer
                 data = rb.sample(batch_size)
 
+                # Convert flat observations back to dict format for use with dict-based actor
+                data["observations"] = unflatten_obs(data["observations"])
+                data["next"]["observations"] = unflatten_obs(data["next"]["observations"])
+
                 # Observations are already normalized when stored in replay buffer
-                # joint_x (stored as "xanchors" for compatibility) is also already in the data
                 # No need to normalize anything here
                 if envs.asymmetric_obs:
                     data["critic_observations"] = normalize_critic_obs(
@@ -906,7 +954,7 @@ def main():
                         eval_avg_return, eval_avg_length = evaluate()
                         # Reset training environments after evaluation (environment-specific hack)
                         if env_type in ["humanoid_bench_dict", "humanoid_bench", "isaaclab"]:
-                            obs, xanchor = envs.reset()
+                            obs = envs.reset()
                         logs["eval_avg_return"] = eval_avg_return
                         logs["eval_avg_length"] = eval_avg_length
 

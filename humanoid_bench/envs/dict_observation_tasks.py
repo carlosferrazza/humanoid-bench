@@ -35,14 +35,7 @@ class DictObservationMixin:
         robot_dof = self.robot.dof
         
         # Joint positions (excluding free joint: 7 DoF)
-        n_joint_pos = robot_dof - 7
-        # Joint velocities (excluding free joint: 6 DoF)
-        n_joint_vel = robot_dof - 7
-        
-        # joint_x: number of joint anchors depends on the robot
-        # H1: 20 anchors, G1: varies based on model
-        # We compute this dynamically in get_obs, here we use robot_dof as approximation
-        n_joint_x = robot_dof - 6  # Typically (dof - 6) anchors
+        n_joint = 19
         
         return Dict({
             "pelvis_position": Box(
@@ -58,13 +51,13 @@ class DictObservationMixin:
                 low=-np.inf, high=np.inf, shape=(3,), dtype=np.float64
             ),
             "joint_positions": Box(
-                low=-np.inf, high=np.inf, shape=(n_joint_pos,), dtype=np.float64
+                low=-np.inf, high=np.inf, shape=(n_joint,), dtype=np.float64
             ),
             "joint_velocities": Box(
-                low=-np.inf, high=np.inf, shape=(n_joint_vel,), dtype=np.float64
+                low=-np.inf, high=np.inf, shape=(n_joint,), dtype=np.float64
             ),
             "joint_x": Box(
-                low=-np.inf, high=np.inf, shape=(n_joint_x, 3), dtype=np.float64
+                low=-np.inf, high=np.inf, shape=(n_joint, 3), dtype=np.float64
             ),
         })
 
@@ -73,6 +66,7 @@ class DictObservationMixin:
         qpos = self._env.data.qpos.flat.copy()
         qvel = self._env.data.qvel.flat.copy()
         joint_x = self._env.data.xanchor.copy()
+        joint_x = joint_x[1:, :] - joint_x[0, :]
 
         # Extract pelvis state (free joint)
         pelvis_position = qpos[:3]  # x, y, z

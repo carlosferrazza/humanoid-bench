@@ -15,18 +15,15 @@ The observation dict (when unflattened) includes:
 - joint_x: Joint anchor coordinates (3D positions)
 """
 
+import torch
 import numpy as np
 from gymnasium.spaces import Box, Dict
 
 from humanoid_bench.envs.basic_locomotion_envs import Walk, Stand, Run
 
-try:
-    import torch
-except ImportError:
-    torch = None
 
 
-def unflatten_obs(flat_obs, joint_x):
+def unflatten_obs(flat_obs):
     """
     Unflatten flat observation vector into a structured dict.
     
@@ -41,33 +38,21 @@ def unflatten_obs(flat_obs, joint_x):
             obs[:, 26:29] = pelvis_linear_velocity
             obs[:, 29:32] = pelvis_angular_velocity
             obs[:, 32:51] = joint_velocities (19 joints)
-        joint_x: Joint anchor coordinates tensor or array (batch, n_joints, 3)
+            obs[:, 51:] = joint_x (19 joints * 3 coords)
         
     Returns:
         Dict with keys: pelvis_position, pelvis_quaternion, pelvis_linear_velocity,
         pelvis_angular_velocity, joint_positions, joint_velocities, joint_x
     """
-    if torch is not None and isinstance(flat_obs, torch.Tensor):
-        return {
-            "pelvis_position": flat_obs[:, 0:3],
-            "pelvis_quaternion": flat_obs[:, 3:7],
-            "joint_positions": flat_obs[:, 7:26],
-            "pelvis_linear_velocity": flat_obs[:, 26:29],
-            "pelvis_angular_velocity": flat_obs[:, 29:32],
-            "joint_velocities": flat_obs[:, 32:51],
-            "joint_x": joint_x,
-        }
-    else:
-        # NumPy array
-        return {
-            "pelvis_position": flat_obs[:, 0:3],
-            "pelvis_quaternion": flat_obs[:, 3:7],
-            "joint_positions": flat_obs[:, 7:26],
-            "pelvis_linear_velocity": flat_obs[:, 26:29],
-            "pelvis_angular_velocity": flat_obs[:, 29:32],
-            "joint_velocities": flat_obs[:, 32:51],
-            "joint_x": joint_x,
-        }
+    return {
+        "pelvis_position": flat_obs[:, 0:3],
+        "pelvis_quaternion": flat_obs[:, 3:7],
+        "joint_positions": flat_obs[:, 7:26],
+        "pelvis_linear_velocity": flat_obs[:, 26:29],
+        "pelvis_angular_velocity": flat_obs[:, 29:32],
+        "joint_velocities": flat_obs[:, 32:51],
+        "joint_x": flat_obs[:, 51:].reshape(flat_obs.shape[0], -1, 3),
+    }
 
 
 class DictObservationMixin:

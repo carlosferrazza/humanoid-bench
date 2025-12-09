@@ -1,9 +1,3 @@
-"""
-HumanoidBench environment wrapper with dict observations.
-
-This environment returns observations as a dictionary instead of a flat vector,
-making it easier to use with different network architectures like EGNN.
-"""
 from __future__ import annotations
 
 import gymnasium as gym
@@ -20,13 +14,12 @@ log.remove()
 log.add(lambda msg: False, level="CRITICAL")
 
 
-def make_env_dict(env_name, rank, render_mode=None, seed=0):
+def make_env(env_name, rank, render_mode=None, seed=0):
     """
-    Utility function for multiprocessed env with dict observations.
+    Utility function for multiprocessed env.
 
-    :param env_name: name of the environment (should be a _dict variant)
     :param rank: (int) index of the subprocess
-    :param seed: (int) the initial seed for RNG
+    :param seed: (int) the inital seed for RNG
     """
 
     if env_name in [
@@ -56,20 +49,6 @@ def make_env_dict(env_name, rank, render_mode=None, seed=0):
 
 
 class HumanoidBenchDictEnv:
-    """
-    Wraps HumanoidBench environment to support parallel environments with dict observations.
-    
-    The observations are returned as a dictionary with the following keys:
-    - pelvis_position: (batch_size, 3) - x, y, z position
-    - pelvis_quaternion: (batch_size, 4) - w, x, y, z quaternion
-    - pelvis_linear_velocity: (batch_size, 3) - vx, vy, vz
-    - pelvis_angular_velocity: (batch_size, 3) - wx, wy, wz
-    - joint_positions: (batch_size, n_joints) - joint angles
-    - joint_velocities: (batch_size, n_joints) - joint velocities
-    - xanchor: (batch_size, n_anchors, 3) - anchor positions
-    """
-
-    # Define observation keys for easy access
     OBS_KEYS = [
         "pelvis_position",
         "pelvis_quaternion", 
@@ -77,7 +56,7 @@ class HumanoidBenchDictEnv:
         "pelvis_angular_velocity",
         "joint_positions",
         "joint_velocities",
-        "joint_x",
+        "xanchor",
     ]
 
     def __init__(self, env_name, num_envs=1, render_mode=None, device=None):
@@ -88,7 +67,7 @@ class HumanoidBenchDictEnv:
 
         # Create the base environment
         self.envs = SubprocVecEnv(
-            [make_env_dict(env_name, i, render_mode=render_mode) for i in range(num_envs)]
+            [make_env(env_name, i, render_mode=render_mode) for i in range(num_envs)]
         )
 
         if env_name in [
@@ -124,7 +103,6 @@ class HumanoidBenchDictEnv:
             for key, space in self.observation_space.spaces.items():
                 size = np.prod(space.shape)
                 self.obs_sizes[key] = space.shape
-                # Include joint_x in flat obs size
                 total_size += size
             self.num_obs = total_size
         else:
@@ -157,19 +135,9 @@ class HumanoidBenchDictEnv:
 
     def reset(self):
         """Reset the environment and return dict observations."""
-        observations, _ = self.envs.reset()
+        observations = self.obs_to_flat(self.envs.reset())
         
-        # Convert to tensors
-        if isinstance(observations, dict):
-            tensor_obs = self._convert_obs_to_tensor(observations)
-            # joint_x is already in the dict, no need to return separately
-        else:
-            tensor_obs = torch.from_numpy(observations).to(
-                device=self.sim_device, dtype=torch.float
-            )
-            # For non-dict obs, we'd need to add joint_x, but this shouldn't happen for dict envs
-
-        return tensor_obs
+        return observations
 
     def render(self):
         assert (
@@ -182,53 +150,34 @@ class HumanoidBenchDictEnv:
         actions = actions.cpu().numpy()
 
         observations, rewards, dones, raw_infos, xanchor = self.envs.step(actions)
+        observations = self.obs_to_flat(observations)
 
         # This will be used for getting 'true' next observations
         infos = dict()
-        
-        # Note: We need a copy here because raw_obs is modified when handling
-        # truncated episodes below (terminal observations replace current obs)
-        if isinstance(observations, dict):
-            raw_obs = {key: observations[key].copy() for key in observations}
-        else:
-            raw_obs = observations.copy()
-        
-        infos["observations"] = {"raw": {"obs": raw_obs}}
+        infos["observations"] = {"raw": {"obs": observations.copy()}}
         truncateds = np.zeros_like(dones)
-        
         for i in range(self.num_envs):
             if raw_infos[i].get("TimeLimit.truncated", False):
                 truncateds[i] = True
-                terminal_obs = raw_infos[i]["terminal_observation"]
-                if isinstance(terminal_obs, dict):
-                    for key in terminal_obs:
-                        infos["observations"]["raw"]["obs"][key][i] = terminal_obs[key]
-                else:
-                    infos["observations"]["raw"]["obs"][i] = terminal_obs
+                infos["observations"]["raw"]["obs"][i] = raw_infos[i][
+                    "terminal_observation"
+                ]
 
-        # Convert to tensors
-        if isinstance(observations, dict):
-            tensor_obs = self._convert_obs_to_tensor(observations)
-            infos["observations"]["raw"]["obs"] = self._convert_obs_to_tensor(
-                infos["observations"]["raw"]["obs"]
-            )
-        else:
-            tensor_obs = torch.from_numpy(observations).to(
-                device=self.sim_device, dtype=torch.float
-            )
-            infos["observations"]["raw"]["obs"] = torch.from_numpy(
-                infos["observations"]["raw"]["obs"]
-            ).to(device=self.sim_device, dtype=torch.float)
-
-        # Note: joint_x (formerly xanchor) is already in the dict, no need to return separately
+        observations = torch.from_numpy(observations).to(
+            device=self.sim_device, dtype=torch.float
+        )
+        xanchor = torch.from_numpy(xanchor).to(device=self.sim_device, dtype=torch.float)
         rewards = torch.from_numpy(rewards).to(
             device=self.sim_device, dtype=torch.float
         )
         dones = torch.from_numpy(dones).to(device=self.sim_device)
         truncateds = torch.from_numpy(truncateds).to(device=self.sim_device)
+        infos["observations"]["raw"]["obs"] = torch.from_numpy(
+            infos["observations"]["raw"]["obs"]
+        ).to(device=self.sim_device, dtype=torch.float)
         infos["time_outs"] = truncateds
 
-        return tensor_obs, rewards, dones, infos, None  # Last return value is None for compatibility
+        return observations, rewards, dones, infos
 
     def obs_to_flat(self, observations):
         """
@@ -239,12 +188,12 @@ class HumanoidBenchDictEnv:
             observations: Dict of observation tensors
             
         Returns:
-            Flat observation tensor (including joint_x)
+            Flat observation tensor (excluding joint_x)
         """
         if isinstance(observations, dict):
             flat_parts = []
             for key in self.OBS_KEYS:
-                if key in observations:
+                if key != 'joint_x' and key in observations:
                     obs = observations[key]
                     if len(obs.shape) > 2:
                         # Flatten multi-dimensional observations

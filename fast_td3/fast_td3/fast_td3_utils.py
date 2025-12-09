@@ -6,6 +6,7 @@ import torch.nn as nn
 
 from tensordict import TensorDict
 
+from humanoid_bench.envs.dict_observation_tasks import unflatten_obs
 
 class SimpleReplayBuffer(nn.Module):
     def __init__(
@@ -482,7 +483,7 @@ class DictEmpiricalNormalization(nn.Module):
                     shape=shape, device=device, eps=eps, until=until
                 )
 
-    def forward(self, x: dict, center: bool = True) -> dict:
+    def forward(self, x: torch.tensor, center: bool = True) -> dict:
         """
         Normalize dict observations.
 
@@ -493,6 +494,9 @@ class DictEmpiricalNormalization(nn.Module):
         Returns:
             dict: Normalized observations.
         """
+        
+        x = unflatten_obs(x)
+        
         normalized = {}
         for key, value in x.items():
             if key in self.SKIP_KEYS:

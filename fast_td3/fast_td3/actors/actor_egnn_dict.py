@@ -11,7 +11,17 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from fast_td3.actors.gnn.egnn_dict import EGNN_dict
+from humanoid_bench.envs.dict_observation_tasks import unflatten_obs
 
+obs_shapes = {
+    "pelvis_position": (3,),
+    "pelvis_quaternion": (4,),
+    "pelvis_linear_velocity": (3,),
+    "pelvis_angular_velocity": (3,),
+    "joint_positions": (19,),  # For H1 robot - 19 body joints
+    "joint_velocities": (19,),  # For H1 robot - 19 body joints
+    "joint_x": (19, 3),  # For H1 robot - 20 joint anchors (3D coordinates), not normalized
+}
 
 class ActorEGNNDict(nn.Module):
     """
@@ -79,16 +89,19 @@ class ActorEGNNDict(nn.Module):
         self.register_buffer("std_min", torch.as_tensor(std_min, device=device))
         self.register_buffer("std_max", torch.as_tensor(std_max, device=device))
 
-    def forward(self, obs: dict) -> torch.Tensor:
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
+        obs = unflatten_obs(obs)
         
         return self.egnn(obs)
 
     def explore(
         self, 
-        obs: dict,
+        obs: torch.Tensor,
         dones: torch.Tensor = None, 
         deterministic: bool = False
     ) -> torch.Tensor:
+        obs = unflatten_obs(obs)
+        
         # If dones is provided, resample noise for environments that are done
         if dones is not None and dones.sum() > 0:
             # Generate new noise scales for done environments

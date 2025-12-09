@@ -14,7 +14,6 @@ import random
 import tqdm
 import wandb
 import numpy as np
-from datetime import datetime
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -27,16 +26,14 @@ torch.set_float32_matmul_precision("high")
 from fast_td3.fast_td3_utils import (
     SimpleReplayBufferGNN,
     DictEmpiricalNormalization,
-    EmpiricalNormalization,
     save_params,
 )
 from fast_td3 import Critic
-from humanoid_bench.envs.dict_observation_tasks import unflatten_obs
 
 from fast_td3.train_utils import create_actor, collect_gradient_stats
 from fast_td3.hyperparams import HumanoidBenchArgs
 import argparse
-from fast_td3.environments.humanoid_bench_env import HumanoidBenchEnv
+from fast_td3.environments.humanoid_bench_dict_env import HumanoidBenchDictEnv as HumanoidBenchEnv
 from IPython.display import display, HTML
 import base64
 import imageio
@@ -51,7 +48,7 @@ def main():
         type=str,
         default="egnn_dict",
         help="The kind of actor to use.",
-        choices=["egnn", "egnn_dict", "mlp"],
+        choices=["egnn_dict", "mlp"],
     )
     parser.add_argument("--env_name", type=str, default="h1-stand-v0")
     parser.add_argument(
@@ -193,8 +190,6 @@ def main():
         n_critic_obs = n_obs
     action_low, action_high = -1.0, 1.0
 
-    # Define observation shapes for dict-based normalization
-    # These shapes match the unflattened observation format
     obs_shapes = {
         "pelvis_position": (3,),
         "pelvis_quaternion": (4,),
@@ -202,48 +197,22 @@ def main():
         "pelvis_angular_velocity": (3,),
         "joint_positions": (19,),  # For H1 robot - 19 body joints
         "joint_velocities": (19,),  # For H1 robot - 19 body joints
-        "joint_x": (20, 3),  # For H1 robot - 20 joint anchors (3D coordinates), not normalized
+        "joint_x": (19, 3),  # For H1 robot - 20 joint anchors (3D coordinates), not normalized
     }
 
     if args.obs_normalization:
-        # Use DictEmpiricalNormalization for dict observations
-        # This normalizes each feature type separately
-        # Hardcoded skip fields: joint_x, pelvis_quaternion, pelvis_position
         obs_normalizer = DictEmpiricalNormalization(
             obs_shapes=obs_shapes, 
             device=device
         )
-        critic_obs_normalizer = EmpiricalNormalization(
-            shape=n_critic_obs, device=device
+        critic_obs_normalizer = DictEmpiricalNormalization(
+            obs_shapes=obs_shapes, 
+            device=device
         )
     else:
         obs_normalizer = nn.Identity()
         critic_obs_normalizer = nn.Identity()
-
-    def normalize_obs(flat_obs, joint_x):
-        """
-        Normalize observations using DictEmpiricalNormalization.
-        
-        Args:
-            flat_obs: Flat observation tensor from environment
-            joint_x: Joint anchor coordinates
-            
-        Returns:
-            Normalized dict observation with pelvis_position set to [0,0,0]
-        """
-        if isinstance(obs_normalizer, nn.Identity):
-            # No normalization - just unflatten
-            obs_dict = unflatten_obs(flat_obs, joint_x)
-        else:
-            # Unflatten then normalize
-            obs_dict = unflatten_obs(flat_obs, joint_x)
-            obs_dict = obs_normalizer(obs_dict)
-        
-        # Set pelvis_position to [0, 0, 0] (origin-centered observations)
-        obs_dict["pelvis_position"] = torch.zeros_like(obs_dict["pelvis_position"])
-        
-        return obs_dict
-    
+    normalize_obs = obs_normalizer.forward
     normalize_critic_obs = critic_obs_normalizer.forward
 
     # Create the main actor and actor detach (twin actor)
@@ -281,7 +250,7 @@ def main():
 
     # critic
     qnet = Critic(
-        n_obs=obs_flat_dim,
+        n_obs=obs_normalizer.get_flat_obs_size(),
         n_act=n_act,
         num_atoms=args.num_atoms,
         v_min=args.v_min,
@@ -291,7 +260,7 @@ def main():
     )
 
     qnet_target = Critic(
-        n_obs=obs_flat_dim,
+        n_obs=obs_normalizer.get_flat_obs_size(),
         n_act=n_act,
         num_atoms=args.num_atoms,
         v_min=args.v_min,
@@ -315,7 +284,7 @@ def main():
     rb = SimpleReplayBufferGNN(
         n_env=args.num_envs,
         buffer_size=args.buffer_size,
-        n_obs=obs_flat_dim,
+        n_obs=obs_normalizer.get_flat_obs_size(),
         n_act=n_act,
         n_critic_obs=n_critic_obs,
         asymmetric_obs=envs.asymmetric_obs,
@@ -333,10 +302,10 @@ def main():
         )
 
         actor.load_state_dict(torch_checkpoint["actor_state_dict"])
-        if hasattr(obs_normalizer, "load_state_dict") and torch_checkpoint.get("obs_normalizer_state"):
-            obs_normalizer.load_state_dict(torch_checkpoint["obs_normalizer_state"])
-        if hasattr(critic_obs_normalizer, "load_state_dict") and torch_checkpoint.get("critic_obs_normalizer_state"):
-            critic_obs_normalizer.load_state_dict(torch_checkpoint["critic_obs_normalizer_state"])
+        obs_normalizer.load_state_dict(torch_checkpoint["obs_normalizer_state"])
+        critic_obs_normalizer.load_state_dict(
+            torch_checkpoint["critic_obs_normalizer_state"]
+        )
         qnet.load_state_dict(torch_checkpoint["qnet_state_dict"])
         qnet_target.load_state_dict(torch_checkpoint["qnet_target_state_dict"])
         global_step = torch_checkpoint["global_step"]
@@ -363,25 +332,17 @@ def main():
         episode_lengths = torch.zeros(num_eval_envs, device=device)
         done_masks = torch.zeros(num_eval_envs, dtype=torch.bool, device=device)
 
-        # Reset environment - returns flat obs and joint_x separately
-        obs, joint_x = eval_envs.reset()
+        obs = eval_envs.reset()
 
         # Run for a fixed number of steps
         for _ in range(eval_envs.max_episode_steps):
             with torch.no_grad(), autocast(
                 device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled
             ):
-                # Unflatten and normalize observations
-                norm_obs_dict = normalize_obs(obs, joint_x)
-                
-                # For egnn_dict actor, pass dict observations directly (includes joint_x)
-                if terminal_args["actor"] == "egnn_dict":
-                    actions = actor(norm_obs_dict)
-                else:
-                    # For standard actors, use flat obs and joint_x separately
-                    actions = actor(obs, joint_x)
+                obs = normalize_obs(obs)
+                actions = actor(obs)
 
-            next_obs, rewards, dones, _, next_joint_x = eval_envs.step(actions.float())
+            next_obs, rewards, dones, _ = eval_envs.step(actions.float())
             episode_returns = torch.where(
                 ~done_masks, episode_returns + rewards, episode_returns
             )
@@ -392,7 +353,6 @@ def main():
             if done_masks.all():
                 break
             obs = next_obs
-            joint_x = next_joint_x
 
         obs_normalizer.train()
         return episode_returns.mean().item(), episode_lengths.mean().item()
@@ -420,17 +380,9 @@ def main():
             with torch.no_grad(), autocast(
                 device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled
             ):
-                # Unflatten and normalize observations
-                norm_obs_dict = normalize_obs(obs, joint_x)
-                
-                # For egnn_dict actor, pass dict observations directly (includes joint_x)
-                if terminal_args["actor"] == "egnn_dict":
-                    actions = actor(norm_obs_dict)
-                else:
-                    # For standard actors, use flat obs and joint_x separately
-                    actions = actor(obs, joint_x)
-                    
-            next_obs, _, done, _, next_joint_x = render_env.step(actions.float())
+                obs = normalize_obs(obs)
+                actions = actor(obs)
+            next_obs, _, done, _ = render_env.step(actions.float())
             if env_type == "mujoco_playground":
                 render_env.state.info["command"] = jnp.array([[1.0, 0.0, 0.0]])
             if i % 2 == 0:
@@ -442,7 +394,6 @@ def main():
             if done.any():
                 break
             obs = next_obs
-            joint_x = next_joint_x
 
         if env_type == "mujoco_playground":
             renders = render_env.render_trajectory(renders)
@@ -468,20 +419,17 @@ def main():
             device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled
         ):
             # Extract transition data from replay buffer
-            # Dict observations are in observations_dict (unflattened and normalized)
-            observations_dict = data["observations_dict"]
-            next_observations_dict = data["next"]["observations_dict"]
-            
-            # Flat observations for critic
-            flat_observations = data["observations"]
-            flat_next_observations = data["next"]["observations"]
+            observations = data["observations"]
+            next_observations = data["next"]["observations"]
+            xanchor = data["xanchors"]
+            next_xanchor = data["next"]["xanchors"]
 
             if envs.asymmetric_obs:
                 critic_observations = data["critic_observations"]
                 next_critic_observations = data["next"]["critic_observations"]
             else:
-                critic_observations = flat_observations
-                next_critic_observations = flat_next_observations
+                critic_observations = observations
+                next_critic_observations = next_observations
 
             actions = data["actions"]
             rewards = data["next"]["rewards"]
@@ -501,18 +449,9 @@ def main():
                 -noise_clip, noise_clip
             )
 
-            # Get next actions from actor
-            # For egnn_dict, actor needs dict observations
-            if terminal_args["actor"] == "egnn_dict":
-                # Actor receives dict observations directly (includes joint_x)
-                next_state_actions = (
-                    actor(next_observations_dict) + clipped_noise
-                ).clamp(action_low, action_high)
-            else:
-                # Standard actor uses flat obs + joint_x
-                next_state_actions = (
-                    actor(flat_next_observations, data["next"]["xanchors"]) + clipped_noise
-                ).clamp(action_low, action_high)
+            next_state_actions = (
+                actor(next_observations) + clipped_noise
+            ).clamp(action_low, action_high)
 
             # Compute target Q-values using target networks (no gradients)
             with torch.no_grad():
@@ -597,27 +536,18 @@ def main():
         with autocast(
             device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled
         ):
-            # Extract observations from replay buffer data
-            # Dict observations are in observations_dict (unflattened and normalized)
-            observations_dict = data["observations_dict"]
-            flat_observations = data["observations"]
-            
             # Use appropriate observations based on environment setup
-            if envs.asymmetric_obs:
-                critic_observations = data["critic_observations"]
-            else:
-                critic_observations = flat_observations
+            critic_observations = (
+                data["critic_observations"]
+                if envs.asymmetric_obs
+                else data["observations"]
+            )
 
             # Compute Q-values for current states with actions from the main actor
             # Note: This uses the main 'actor' network, not 'actor_detach'
-            if terminal_args["actor"] == "egnn_dict":
-                # Actor receives dict observations directly (includes joint_x)
-                actor_actions = actor(observations_dict)
-            else:
-                # Standard actor uses flat obs + joint_x
-                actor_actions = actor(flat_observations, data["xanchors"])
-                
-            qf1, qf2 = qnet(critic_observations, actor_actions)
+            qf1, qf2 = qnet(
+                critic_observations, actor(data["observations"])
+            )
 
             # Convert distributional Q-values to scalar estimates
             qf1_value = qnet.get_value(F.softmax(qf1, dim=1))
@@ -709,7 +639,7 @@ def main():
         obs, critic_obs = envs.reset_with_critic_obs()
         critic_obs = torch.as_tensor(critic_obs, device=device, dtype=torch.float)
     else:
-        obs, joint_x = envs.reset()  # obs is flat, joint_x is separate
+        obs = envs.reset()  # obs is flat, joint_x is separate
     pbar = tqdm.tqdm(total=args.total_timesteps, initial=global_step)
     dones = None
 
@@ -722,21 +652,13 @@ def main():
         with torch.no_grad(), autocast(
             device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled
         ):
-            # obs and joint_x from env are flat vectors
-            # Unflatten and normalize observations
-            norm_obs_dict = normalize_obs(obs, joint_x)
-            
-            # For egnn_dict actor, pass normalized dict observations directly (includes joint_x)
-            if terminal_args["actor"] == "egnn_dict":
-                actions = policy(obs=norm_obs_dict, joint_x_param=None, dones=dones)
-            else:
-                # For standard egnn/mlp actors, use flat obs and joint_x separately
-                # Using flat obs and joint_x from environment
-                actions = policy(obs=obs, xanchor=joint_x, dones=dones)
+
+            norm_obs = normalize_obs(obs)
+            actions = policy(obs=norm_obs, dones=dones)
 
         # ENVIRONMENT INTERACTION PHASE
         # Take actions in the environment and collect transition data
-        next_obs, rewards, dones, infos, next_joint_x = envs.step(actions.float())
+        next_obs, rewards, dones, infos = envs.step(actions.float())
         truncations = infos["time_outs"]  # Episodes ended due to time limits
 
         # Extract privileged observations for critic if using asymmetric observations
@@ -749,9 +671,6 @@ def main():
         true_next_obs = torch.where(
             dones[:, None] > 0, infos["observations"]["raw"]["obs"], next_obs
         )
-        true_next_xanchor = torch.where(
-            dones[:, None, None] > 0, infos["observations"]["raw"].get("xanchor", next_joint_x), next_joint_x
-        )
         if envs.asymmetric_obs:
             true_next_critic_obs = torch.where(
                 dones[:, None] > 0,
@@ -760,15 +679,12 @@ def main():
             )
 
         # Create transition tuple (s, a, r, s', done, truncated) for replay buffer
-        # Store flat observations directly (no normalization at storage time)
         transition = TensorDict(
             {
                 "observations": obs,
-                "xanchors": joint_x,
                 "actions": torch.as_tensor(actions, device=device, dtype=torch.float),
                 "next": {
                     "observations": true_next_obs,
-                    "xanchors": true_next_xanchor,
                     "rewards": torch.as_tensor(
                         rewards, device=device, dtype=torch.float
                     ),
@@ -786,7 +702,6 @@ def main():
 
         # UPDATE OBSERVATIONS FOR NEXT ITERATION
         obs = next_obs
-        joint_x = next_joint_x
         if envs.asymmetric_obs:
             critic_obs = next_critic_obs
 
@@ -803,12 +718,11 @@ def main():
                 # Sample a batch of transitions from replay buffer
                 data = rb.sample(batch_size)
 
-                # Unflatten and normalize observations for actor/critic
-                # Observations are stored as flat in replay buffer
-                # We unflatten them and normalize with DictEmpiricalNormalization
-                data["observations_dict"] = normalize_obs(data["observations"], data["xanchors"])
-                data["next"]["observations_dict"] = normalize_obs(data["next"]["observations"], data["next"]["xanchors"])
-
+                # Normalize observations for stable training
+                data["observations"] = normalize_obs(data["observations"])
+                data["next"]["observations"] = normalize_obs(
+                    data["next"]["observations"]
+                )
                 if envs.asymmetric_obs:
                     data["critic_observations"] = normalize_critic_obs(
                         data["critic_observations"]

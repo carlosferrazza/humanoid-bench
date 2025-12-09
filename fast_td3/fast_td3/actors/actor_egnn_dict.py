@@ -114,38 +114,49 @@ class ActorEGNNDict(nn.Module):
         
         return flat_obs
 
-    def forward(self, obs_dict: dict) -> torch.Tensor:
+    def forward(self, obs, xanchor=None) -> torch.Tensor:
         """
-        Forward pass with dict observations.
+        Forward pass with observations.
         
         Args:
-            obs_dict: Dictionary of normalized observations including 'xanchor'
+            obs: Either a dict of normalized observations or flat tensor
+            xanchor: xanchor tensor (if obs is flat) or None (if obs is dict with xanchor inside)
             
         Returns:
             actions: (batch, num_joints) tensor
         """
-        # Extract xanchor from dict
-        xanchor = obs_dict['xanchor']
-        
-        # Convert dict to flat obs for EGNN
-        flat_obs = self.dict_to_flat_obs(obs_dict)
+        # Handle both dict and flat observation inputs
+        if isinstance(obs, dict):
+            # Dict observation - xanchor should be in the dict
+            obs_dict = obs
+            if 'xanchor' not in obs_dict and xanchor is not None:
+                obs_dict = obs_dict.copy()
+                obs_dict['xanchor'] = xanchor
+            xanchor_tensor = obs_dict['xanchor']
+            flat_obs = self.dict_to_flat_obs(obs_dict)
+        else:
+            # Flat observation
+            flat_obs = obs
+            xanchor_tensor = xanchor
         
         # Pass to EGNN
-        result = self.egnn(flat_obs, xanchor)
+        result = self.egnn(flat_obs, xanchor_tensor)
         
         return result
 
     def explore(
         self, 
-        obs_dict: dict, 
+        obs, 
+        xanchor=None,
         dones: torch.Tensor = None, 
         deterministic: bool = False
     ) -> torch.Tensor:
         """
-        Exploration policy with dict observations.
+        Exploration policy with observations.
         
         Args:
-            obs_dict: Dictionary of normalized observations including 'xanchor'
+            obs: Either a dict of normalized observations or flat tensor
+            xanchor: xanchor tensor (if obs is flat) or None (if obs is dict with xanchor inside)
             dones: (batch,) boolean tensor indicating done episodes
             deterministic: If True, return deterministic actions without noise
             
@@ -166,7 +177,7 @@ class ActorEGNNDict(nn.Module):
             self.noise_scales = torch.where(dones_view, new_scales, self.noise_scales)
 
         # Get deterministic action
-        act = self(obs_dict)
+        act = self(obs, xanchor)
         
         if deterministic:
             return act

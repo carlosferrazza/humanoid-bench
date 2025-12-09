@@ -406,7 +406,7 @@ def main():
                 # For egnn_dict actor, pass dict observations directly
                 if terminal_args["actor"] == "egnn_dict":
                     norm_obs['xanchor'] = normalize_xanchor(xanchor)
-                    actions = actor(norm_obs)
+                    actions = actor(norm_obs, xanchor=None)
                 else:
                     # For standard actors, flatten observations
                     flat_obs, xanchor_for_actor = get_flat_obs_and_xanchor(norm_obs, xanchor)
@@ -459,7 +459,7 @@ def main():
                 # For egnn_dict actor, pass dict observations directly
                 if terminal_args["actor"] == "egnn_dict":
                     norm_obs['xanchor'] = normalize_xanchor(xanchor)
-                    actions = actor(norm_obs)
+                    actions = actor(norm_obs, xanchor=None)
                 else:
                     # For standard actors, flatten observations
                     flat_obs, xanchor_for_actor = get_flat_obs_and_xanchor(norm_obs, xanchor)
@@ -748,7 +748,7 @@ def main():
             if terminal_args["actor"] == "egnn_dict":
                 # Add xanchor to normalized dict for egnn_dict actor
                 norm_obs['xanchor'] = normalize_xanchor(xanchor)
-                actions = policy(obs_dict=norm_obs, dones=dones)
+                actions = policy(obs=norm_obs, xanchor=None, dones=dones)
             else:
                 # Flatten observations for standard egnn/mlp actors
                 flat_norm_obs, norm_xanchor = get_flat_obs_and_xanchor(norm_obs, xanchor)

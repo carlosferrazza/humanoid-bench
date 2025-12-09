@@ -3,6 +3,8 @@ EGNN Actor that accepts dict observations directly.
 
 This avoids breaking CUDA graph by not flattening dict observations,
 instead extracting features directly from the structured dict.
+
+The dict observation contains all necessary inputs including joint_x (joint coordinates).
 """
 import torch
 import torch.nn as nn
@@ -17,6 +19,7 @@ class ActorEGNNDict(nn.Module):
     
     This version avoids dynamic tensor operations (like concatenation for flattening)
     that can break CUDA graphs, by working with dict observations directly.
+    The obs dict contains all inputs including joint_x.
     """
     
     def __init__(
@@ -121,40 +124,37 @@ class ActorEGNNDict(nn.Module):
         
         return flat_obs
 
-    def forward(self, obs, xanchor=None) -> torch.Tensor:
+    def forward(self, obs) -> torch.Tensor:
         """
         Forward pass with observations.
         
         Args:
-            obs: Either a dict of normalized observations or flat tensor
-            xanchor: xanchor tensor (if obs is flat) or None (if obs is dict with xanchor inside)
+            obs: Dict of normalized observations including 'joint_x'
             
         Returns:
             actions: (batch, num_joints) tensor
         """
-        # Handle both dict and flat observation inputs
-        if isinstance(obs, dict):
-            # Dict observation - xanchor should be in the dict
-            obs_dict = obs
-            if 'xanchor' not in obs_dict and xanchor is not None:
-                obs_dict = obs_dict.copy()
-                obs_dict['xanchor'] = xanchor
-            xanchor_tensor = obs_dict['xanchor']
-            flat_obs = self.dict_to_flat_obs(obs_dict)
-        else:
-            # Flat observation
-            flat_obs = obs
-            xanchor_tensor = xanchor
+        # Obs must be a dict with joint_x inside
+        if not isinstance(obs, dict):
+            raise ValueError("ActorEGNNDict requires dict observations, got tensor")
+        
+        if 'joint_x' not in obs:
+            raise ValueError("Observation dict must contain 'joint_x' key")
+        
+        # Extract joint_x from dict
+        joint_x = obs['joint_x']
+        
+        # Convert dict to flat obs for EGNN (excluding joint_x)
+        flat_obs = self.dict_to_flat_obs(obs)
         
         # Pass to EGNN
-        result = self.egnn(flat_obs, xanchor_tensor)
+        result = self.egnn(flat_obs, joint_x)
         
         return result
 
     def explore(
         self, 
-        obs, 
-        xanchor=None,
+        obs,
         dones: torch.Tensor = None, 
         deterministic: bool = False
     ) -> torch.Tensor:
@@ -162,8 +162,7 @@ class ActorEGNNDict(nn.Module):
         Exploration policy with observations.
         
         Args:
-            obs: Either a dict of normalized observations or flat tensor
-            xanchor: xanchor tensor (if obs is flat) or None (if obs is dict with xanchor inside)
+            obs: Dict of normalized observations including 'joint_x'
             dones: (batch,) boolean tensor indicating done episodes
             deterministic: If True, return deterministic actions without noise
             
@@ -184,7 +183,7 @@ class ActorEGNNDict(nn.Module):
             self.noise_scales = torch.where(dones_view, new_scales, self.noise_scales)
 
         # Get deterministic action
-        act = self(obs, xanchor)
+        act = self(obs)
         
         if deterministic:
             return act

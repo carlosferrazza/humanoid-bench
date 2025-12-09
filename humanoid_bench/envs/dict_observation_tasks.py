@@ -11,7 +11,7 @@ The observation dict includes:
 - pelvis_angular_velocity: Root angular velocity (wx, wy, wz)
 - joint_positions: Joint angles
 - joint_velocities: Joint velocities
-- xanchor: Joint anchor coordinates (3D positions)
+- joint_x: Joint anchor coordinates (3D positions)
 """
 
 import numpy as np
@@ -39,10 +39,10 @@ class DictObservationMixin:
         # Joint velocities (excluding free joint: 6 DoF)
         n_joint_vel = robot_dof - 7
         
-        # xanchor: number of anchors depends on the robot
+        # joint_x: number of joint anchors depends on the robot
         # H1: 20 anchors, G1: varies based on model
         # We compute this dynamically in get_obs, here we use robot_dof as approximation
-        n_xanchor = robot_dof - 6  # Typically (dof - 6) anchors
+        n_joint_x = robot_dof - 6  # Typically (dof - 6) anchors
         
         return Dict({
             "pelvis_position": Box(
@@ -63,8 +63,8 @@ class DictObservationMixin:
             "joint_velocities": Box(
                 low=-np.inf, high=np.inf, shape=(n_joint_vel,), dtype=np.float64
             ),
-            "xanchor": Box(
-                low=-np.inf, high=np.inf, shape=(n_xanchor, 3), dtype=np.float64
+            "joint_x": Box(
+                low=-np.inf, high=np.inf, shape=(n_joint_x, 3), dtype=np.float64
             ),
         })
 
@@ -72,7 +72,7 @@ class DictObservationMixin:
         """Return observations as a dictionary with separate feature types."""
         qpos = self._env.data.qpos.flat.copy()
         qvel = self._env.data.qvel.flat.copy()
-        xanchor = self._env.data.xanchor.copy()
+        joint_x = self._env.data.xanchor.copy()
 
         # Extract pelvis state (free joint)
         pelvis_position = qpos[:3]  # x, y, z
@@ -93,7 +93,7 @@ class DictObservationMixin:
             "pelvis_angular_velocity": pelvis_angular_velocity,
             "joint_positions": joint_positions,
             "joint_velocities": joint_velocities,
-            "xanchor": xanchor,
+            "joint_x": joint_x,
         }
 
 

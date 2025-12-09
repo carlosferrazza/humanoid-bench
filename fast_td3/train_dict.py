@@ -200,7 +200,7 @@ def main():
         "pelvis_angular_velocity": (3,),
         "joint_positions": (19,),  # For H1 robot
         "joint_velocities": (19,),  # For H1 robot
-        "xanchor": (20, 3),  # xanchor is not normalized
+        "joint_x": (20, 3),  # joint_x is not normalized
     }
 
     if args.obs_normalization:
@@ -209,18 +209,14 @@ def main():
         obs_normalizer = DictEmpiricalNormalization(
             obs_shapes=obs_shapes, 
             device=device,
-            skip_keys=["xanchor"]
+            skip_keys=["joint_x"]  # Don't normalize joint_x
         )
-        critic_obs_normalizer = DictEmpiricalNormalization(
-            obs_shapes=obs_shapes, 
-            device=device,
-            skip_keys=["xanchor"]
+        critic_obs_normalizer = EmpiricalNormalization(
+            shape=n_critic_obs, device=device
         )
-        xanchor_normalizer = nn.Identity()
     else:
         obs_normalizer = nn.Identity()
         critic_obs_normalizer = nn.Identity()
-        xanchor_normalizer = nn.Identity()
 
     def normalize_obs(obs):
         """Normalize dict observations using DictEmpiricalNormalization."""
@@ -236,7 +232,6 @@ def main():
             return obs
     
     normalize_critic_obs = critic_obs_normalizer.forward
-    normalize_xanchor = xanchor_normalizer.forward
 
     # Create the main actor and actor detach (twin actor)
     actor = create_actor(
@@ -327,8 +322,6 @@ def main():
         actor.load_state_dict(torch_checkpoint["actor_state_dict"])
         if hasattr(obs_normalizer, "load_state_dict") and torch_checkpoint.get("obs_normalizer_state"):
             obs_normalizer.load_state_dict(torch_checkpoint["obs_normalizer_state"])
-        if hasattr(xanchor_normalizer, "load_state_dict") and torch_checkpoint.get("xanchor_normalizer_state"):
-            xanchor_normalizer.load_state_dict(torch_checkpoint["xanchor_normalizer_state"])
         if hasattr(critic_obs_normalizer, "load_state_dict") and torch_checkpoint.get("critic_obs_normalizer_state"):
             critic_obs_normalizer.load_state_dict(torch_checkpoint["critic_obs_normalizer_state"])
         qnet.load_state_dict(torch_checkpoint["qnet_state_dict"])
@@ -337,51 +330,46 @@ def main():
     else:
         global_step = 0
 
-    def get_flat_obs_and_xanchor(obs_dict, xanchor_tensor):
+    def get_flat_obs(obs_dict):
         """
-        Convert dict observations to flat tensor for actor/critic.
+        Convert dict observations to flat tensor for storage in replay buffer.
         
         Args:
-            obs_dict: Either a dict observation or flat tensor observation
-            xanchor_tensor: xanchor tensor (used when obs_dict is flat)
+            obs_dict: Dict observation (must be a dict for dict env)
             
         Returns:
-            tuple: (flat_obs, xanchor)
-            - flat_obs: Flattened observation tensor (excludes xanchor)
-            - xanchor: xanchor tensor from dict['xanchor'] if available, otherwise xanchor_tensor
+            flat_obs: Flattened observation tensor (excludes joint_x which stays in dict)
             
         Note: The flat observation is created by concatenating fields in a fixed order:
-        pelvis_position, pelvis_quaternion, pelvis_linear_velocity, 
-        pelvis_angular_velocity, joint_positions, joint_velocities
+        pelvis_position, pelvis_quaternion, joint_positions,
+        pelvis_linear_velocity, pelvis_angular_velocity, joint_velocities
+        
+        joint_x is NOT included in the flat observation - it remains in the dict.
         """
-        if isinstance(obs_dict, dict):
-            # xanchor is always extracted from dict if present, otherwise use the fallback
-            xanchor = obs_dict.get('xanchor', xanchor_tensor)
-            
-            # Create flat observation by concatenating fields in fixed order
-            # This order MUST match the expected input format for EGNN's generate_input:
-            # obs[:, 0:3] = pelvis_position
-            # obs[:, 3:7] = pelvis_quaternion
-            # obs[:, 7:26] = joint_positions
-            # obs[:, 26:29] = pelvis_linear_velocity
-            # obs[:, 29:32] = pelvis_angular_velocity
-            # obs[:, 32:51] = joint_velocities
-            OBS_KEYS_ORDER = ['pelvis_position', 'pelvis_quaternion', 
-                              'joint_positions',
-                              'pelvis_linear_velocity', 'pelvis_angular_velocity',
-                              'joint_velocities']
-            
-            # Validate all required keys are present
-            missing_keys = [key for key in OBS_KEYS_ORDER if key not in obs_dict]
-            if missing_keys:
-                raise ValueError(f"Missing required observation keys: {missing_keys}")
-            
-            flat_parts = [obs_dict[key] for key in OBS_KEYS_ORDER]
-            flat_obs = torch.cat(flat_parts, dim=-1)
-            return flat_obs, xanchor
-        else:
-            # obs_dict is already flat, return as-is
-            return obs_dict, xanchor_tensor
+        if not isinstance(obs_dict, dict):
+            raise ValueError("get_flat_obs expects dict observations")
+        
+        # Create flat observation by concatenating fields in fixed order
+        # This order MUST match the expected input format for EGNN's generate_input:
+        # obs[:, 0:3] = pelvis_position
+        # obs[:, 3:7] = pelvis_quaternion
+        # obs[:, 7:26] = joint_positions
+        # obs[:, 26:29] = pelvis_linear_velocity
+        # obs[:, 29:32] = pelvis_angular_velocity
+        # obs[:, 32:51] = joint_velocities
+        OBS_KEYS_ORDER = ['pelvis_position', 'pelvis_quaternion', 
+                          'joint_positions',
+                          'pelvis_linear_velocity', 'pelvis_angular_velocity',
+                          'joint_velocities']
+        
+        # Validate all required keys are present
+        missing_keys = [key for key in OBS_KEYS_ORDER if key not in obs_dict]
+        if missing_keys:
+            raise ValueError(f"Missing required observation keys: {missing_keys}")
+        
+        flat_parts = [obs_dict[key] for key in OBS_KEYS_ORDER]
+        flat_obs = torch.cat(flat_parts, dim=-1)
+        return flat_obs
 
     def evaluate():
         """
@@ -398,16 +386,13 @@ def main():
                 - average_episode_length: Mean number of steps across all evaluation episodes
         """
         obs_normalizer.eval()
-        xanchor_normalizer.eval()
         num_eval_envs = eval_envs.num_envs
         episode_returns = torch.zeros(num_eval_envs, device=device)
         episode_lengths = torch.zeros(num_eval_envs, device=device)
         done_masks = torch.zeros(num_eval_envs, dtype=torch.bool, device=device)
 
-        if env_type == "isaaclab":
-            obs = eval_envs.reset(random_start_init=False)
-        else:
-            obs, xanchor = eval_envs.reset()
+        # Reset environment - obs is a dict containing joint_x
+        obs = eval_envs.reset()
 
         # Run for a fixed number of steps
         for _ in range(eval_envs.max_episode_steps):
@@ -416,17 +401,16 @@ def main():
             ):
                 norm_obs = normalize_obs(obs)
                 
-                # For egnn_dict actor, pass dict observations directly
+                # For egnn_dict actor, pass dict observations directly (includes joint_x)
                 if terminal_args["actor"] == "egnn_dict":
-                    norm_obs['xanchor'] = normalize_xanchor(xanchor)
-                    actions = actor(norm_obs, xanchor=None)
+                    actions = actor(norm_obs)
                 else:
-                    # For standard actors, flatten observations
-                    flat_obs, xanchor_for_actor = get_flat_obs_and_xanchor(norm_obs, xanchor)
-                    xanchor_for_actor = normalize_xanchor(xanchor_for_actor)
-                    actions = actor(flat_obs, xanchor_for_actor)
+                    # For standard actors, flatten observations and extract joint_x separately
+                    flat_obs = get_flat_obs(norm_obs)
+                    joint_x = norm_obs['joint_x']
+                    actions = actor(flat_obs, joint_x)
 
-            next_obs, rewards, dones, _, next_xanchor = eval_envs.step(actions.float())
+            next_obs, rewards, dones, _, _ = eval_envs.step(actions.float())
             episode_returns = torch.where(
                 ~done_masks, episode_returns + rewards, episode_returns
             )
@@ -437,31 +421,28 @@ def main():
             if done_masks.all():
                 break
             obs = next_obs
-            xanchor = next_xanchor
 
         obs_normalizer.train()
-        xanchor_normalizer.train()
         return episode_returns.mean().item(), episode_lengths.mean().item()
 
     def render_with_rollout():
         obs_normalizer.eval()
-        xanchor_normalizer.eval()
 
         # Quick rollout for rendering
-        if env_type == "humanoid_bench_dict":
-            obs, xanchor = render_env.reset()
-            renders = [render_env.render()]
-        elif env_type == "humanoid_bench":
-            obs, xanchor = render_env.reset()
+        if env_type in ["humanoid_bench_dict", "humanoid_bench"]:
+            obs = render_env.reset()
             renders = [render_env.render()]
         elif env_type == "isaaclab":
             raise NotImplementedError(
                 "We don't support rendering for IsaacLab environments"
             )
         else:
-            obs, xanchor = render_env.reset()
-            render_env.state.info["command"] = jnp.array([[1.0, 0.0, 0.0]])
-            renders = [render_env.state]
+            obs = render_env.reset()
+            if hasattr(render_env, 'state'):
+                render_env.state.info["command"] = jnp.array([[1.0, 0.0, 0.0]])
+                renders = [render_env.state]
+            else:
+                renders = []
 
         for i in range(render_env.max_episode_steps):
             with torch.no_grad(), autocast(
@@ -469,34 +450,32 @@ def main():
             ):
                 norm_obs = normalize_obs(obs)
                 
-                # For egnn_dict actor, pass dict observations directly
+                # For egnn_dict actor, pass dict observations directly (includes joint_x)
                 if terminal_args["actor"] == "egnn_dict":
-                    norm_obs['xanchor'] = normalize_xanchor(xanchor)
-                    actions = actor(norm_obs, xanchor=None)
+                    actions = actor(norm_obs)
                 else:
-                    # For standard actors, flatten observations
-                    flat_obs, xanchor_for_actor = get_flat_obs_and_xanchor(norm_obs, xanchor)
-                    xanchor_for_actor = normalize_xanchor(xanchor_for_actor)
-                    actions = actor(flat_obs, xanchor_for_actor)
+                    # For standard actors, flatten observations and extract joint_x separately
+                    flat_obs = get_flat_obs(norm_obs)
+                    joint_x = norm_obs['joint_x']
+                    actions = actor(flat_obs, joint_x)
                     
-            next_obs, _, done, _, next_xanchor = render_env.step(actions.float())
+            next_obs, _, done, _, _ = render_env.step(actions.float())
             if env_type == "mujoco_playground":
                 render_env.state.info["command"] = jnp.array([[1.0, 0.0, 0.0]])
             if i % 2 == 0:
                 if env_type in ["humanoid_bench_dict", "humanoid_bench"]:
                     renders.append(render_env.render())
                 else:
-                    renders.append(render_env.state)
+                    if hasattr(render_env, 'state'):
+                        renders.append(render_env.state)
             if done.any():
                 break
             obs = next_obs
-            xanchor = next_xanchor
 
         if env_type == "mujoco_playground":
             renders = render_env.render_trajectory(renders)
 
         obs_normalizer.train()
-        xanchor_normalizer.train()
         return renders
 
     policy_noise = args.policy_noise

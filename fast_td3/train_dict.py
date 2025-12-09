@@ -47,11 +47,11 @@ def main():
     parser.add_argument(
         "--actor",
         type=str,
-        default="egnn",
+        default="egnn_dict",
         help="The kind of actor to use.",
-        choices=["egnn", "mlp"],
+        choices=["egnn", "egnn_dict", "mlp"],
     )
-    parser.add_argument("--env_name", type=str, default="h1-stand-v0")
+    parser.add_argument("--env_name", type=str, default="h1-stand_dict-v0")
     parser.add_argument(
         "--total_timesteps",
         type=int,
@@ -402,9 +402,16 @@ def main():
                 device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled
             ):
                 norm_obs = normalize_obs(obs)
-                flat_obs, xanchor_for_actor = get_flat_obs_and_xanchor(norm_obs, xanchor)
-                xanchor_for_actor = normalize_xanchor(xanchor_for_actor)
-                actions = actor(flat_obs, xanchor_for_actor)
+                
+                # For egnn_dict actor, pass dict observations directly
+                if terminal_args["actor"] == "egnn_dict":
+                    norm_obs['xanchor'] = normalize_xanchor(xanchor)
+                    actions = actor(norm_obs)
+                else:
+                    # For standard actors, flatten observations
+                    flat_obs, xanchor_for_actor = get_flat_obs_and_xanchor(norm_obs, xanchor)
+                    xanchor_for_actor = normalize_xanchor(xanchor_for_actor)
+                    actions = actor(flat_obs, xanchor_for_actor)
 
             next_obs, rewards, dones, _, next_xanchor = eval_envs.step(actions.float())
             episode_returns = torch.where(
@@ -448,9 +455,17 @@ def main():
                 device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled
             ):
                 norm_obs = normalize_obs(obs)
-                flat_obs, xanchor_for_actor = get_flat_obs_and_xanchor(norm_obs, xanchor)
-                xanchor_for_actor = normalize_xanchor(xanchor_for_actor)
-                actions = actor(flat_obs, xanchor_for_actor)
+                
+                # For egnn_dict actor, pass dict observations directly
+                if terminal_args["actor"] == "egnn_dict":
+                    norm_obs['xanchor'] = normalize_xanchor(xanchor)
+                    actions = actor(norm_obs)
+                else:
+                    # For standard actors, flatten observations
+                    flat_obs, xanchor_for_actor = get_flat_obs_and_xanchor(norm_obs, xanchor)
+                    xanchor_for_actor = normalize_xanchor(xanchor_for_actor)
+                    actions = actor(flat_obs, xanchor_for_actor)
+                    
             next_obs, _, done, _, next_xanchor = render_env.step(actions.float())
             if env_type == "mujoco_playground":
                 render_env.state.info["command"] = jnp.array([[1.0, 0.0, 0.0]])
@@ -727,9 +742,19 @@ def main():
                 obs, xanchor = obs
 
             norm_obs = normalize_obs(obs)
-            flat_norm_obs, norm_xanchor = get_flat_obs_and_xanchor(norm_obs, xanchor)
-            norm_xanchor = normalize_xanchor(norm_xanchor)
-            actions = policy(obs=flat_norm_obs, xanchor=norm_xanchor, dones=dones)
+            
+            # For egnn_dict actor, pass normalized dict observations directly
+            # For egnn/mlp actors, flatten observations first
+            if terminal_args["actor"] == "egnn_dict":
+                # Add xanchor to normalized dict for egnn_dict actor
+                norm_obs['xanchor'] = normalize_xanchor(xanchor)
+                actions = policy(obs_dict=norm_obs, dones=dones)
+            else:
+                # Flatten observations for standard egnn/mlp actors
+                flat_norm_obs, norm_xanchor = get_flat_obs_and_xanchor(norm_obs, xanchor)
+                norm_xanchor = normalize_xanchor(norm_xanchor)
+                actions = policy(obs=flat_norm_obs, xanchor=norm_xanchor, dones=dones)
+
 
         # ENVIRONMENT INTERACTION PHASE
         # Take actions in the environment and collect transition data

@@ -203,6 +203,13 @@ def main():
         "joint_x": (20, 3),  # joint_x is not normalized
     }
 
+    obs_flat_dim = 0
+    for key, shape in obs_shapes.items():
+        if key == "joint_x":
+            obs_flat_dim += shape[0] * shape[1]
+        else:
+            obs_flat_dim += shape[0]
+
     if args.obs_normalization:
         # Use DictEmpiricalNormalization for dict observations
         # This normalizes each feature type separately
@@ -211,8 +218,10 @@ def main():
             device=device,
             skip_keys=["joint_x"]  # Don't normalize joint_x
         )
-        critic_obs_normalizer = EmpiricalNormalization(
-            shape=n_critic_obs, device=device
+        critic_obs_normalizer = DictEmpiricalNormalization(
+            obs_shapes=obs_shapes, 
+            device=device,
+            skip_keys=["joint_x"]  # Don't normalize joint_x
         )
     else:
         obs_normalizer = nn.Identity()
@@ -302,7 +311,7 @@ def main():
     rb = SimpleReplayBufferGNN(
         n_env=args.num_envs,
         buffer_size=args.buffer_size,
-        n_obs=n_obs,
+        n_obs=obs_flat_dim,
         n_act=n_act,
         n_critic_obs=n_critic_obs,
         asymmetric_obs=envs.asymmetric_obs,
@@ -358,16 +367,17 @@ def main():
         # obs[:, 29:32] = pelvis_angular_velocity
         # obs[:, 32:51] = joint_velocities
         OBS_KEYS_ORDER = ['pelvis_position', 'pelvis_quaternion', 
-                          'joint_positions',
                           'pelvis_linear_velocity', 'pelvis_angular_velocity',
-                          'joint_velocities']
+                          'joint_positions',
+                          'joint_velocities',
+                          'joint_x']
         
         # Validate all required keys are present
         missing_keys = [key for key in OBS_KEYS_ORDER if key not in obs_dict]
         if missing_keys:
             raise ValueError(f"Missing required observation keys: {missing_keys}")
         
-        flat_parts = [obs_dict[key] for key in OBS_KEYS_ORDER]
+        flat_parts = [obs_dict[key] if key != "joint_x" else obs_dict[key].view(obs_dict[key].shape[0], -1) for key in OBS_KEYS_ORDER]
         flat_obs = torch.cat(flat_parts, dim=-1)
         return flat_obs
 
@@ -763,17 +773,7 @@ def main():
         if envs.asymmetric_obs:
             next_critic_obs = infos["observations"]["critic"]
 
-        # TRANSITION DATA PREPARATION
-        # Handle episode boundaries correctly - use 'raw' observations for terminal states
-        # This ensures we store the actual final state, not the auto-reset state
         
-        # Normalize dict observations BEFORE converting to flat for replay buffer storage
-        # This allows DictEmpiricalNormalization to work on each feature separately
-        # NOTE: This is different from the original train.py where normalization happens
-        # at sampling time. Here we normalize at storage time because:
-        # 1. DictEmpiricalNormalization requires dict structure
-        # 2. Replay buffer stores flat observations for efficiency
-        # 3. Normalizer statistics are updated during environment interaction (online learning)
         norm_obs = normalize_obs(obs)
         norm_next_obs = normalize_obs(next_obs)
         

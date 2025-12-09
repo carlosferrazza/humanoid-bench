@@ -447,7 +447,7 @@ class EmpiricalNormalization(nn.Module):
 class DictEmpiricalNormalization(nn.Module):
     """
     Normalize dict observations with separate normalizers for each feature type.
-    
+
     This class applies EmpiricalNormalization to each feature type in the observation
     dict, except for features specified in skip_keys (like xanchor).
     """
@@ -469,7 +469,7 @@ class DictEmpiricalNormalization(nn.Module):
         self.eps = eps
         self.until = until
         self.skip_keys = skip_keys or ["xanchor"]
-        
+
         # Create normalizers for each feature type
         self.normalizers = nn.ModuleDict()
         for key, shape in obs_shapes.items():
@@ -481,11 +481,11 @@ class DictEmpiricalNormalization(nn.Module):
     def forward(self, x: dict, center: bool = True) -> dict:
         """
         Normalize dict observations.
-        
+
         Args:
             x (dict): Dictionary of observation tensors.
             center (bool): If True, subtract mean. If False, only scale by std.
-            
+
         Returns:
             dict: Normalized observations.
         """
@@ -512,14 +512,14 @@ class DictEmpiricalNormalization(nn.Module):
     def to_flat(self, x: dict, include_skip_keys: bool = False) -> torch.Tensor:
         """
         Convert dict observations to a flat tensor.
-        
+
         Args:
             x (dict): Dictionary of observation tensors.
             include_skip_keys (bool): If True, include skipped keys in the flat output.
-            
+
         Returns:
             torch.Tensor: Flat observation tensor.
-            
+
         Note:
             Keys are sorted alphabetically to ensure consistent ordering.
             The resulting flat tensor structure will be:
@@ -573,6 +573,7 @@ def save_params(
     torch.save(save_dict, save_path, _use_new_zipfile_serialization=True)
     print(f"Saved parameters and configuration to {save_path}")
 
+
 class SimpleReplayBufferGNN(nn.Module):
     def __init__(
         self,
@@ -599,12 +600,12 @@ class SimpleReplayBufferGNN(nn.Module):
         super().__init__()
 
         if env_name in [
-        "h1-push-v0",
-        "h1-basketball-v0",
-        "h1-package-v0",
-        "h1-sit_hard-v0",
-        "h1-balance_simple-v0",
-        ]: 
+            "h1-push-v0",
+            "h1-basketball-v0",
+            "h1-package-v0",
+            "h1-sit_hard-v0",
+            "h1-balance_simple-v0",
+        ]:
             n_xanchor = 21
         else:
             n_xanchor = 20
@@ -726,9 +727,17 @@ class SimpleReplayBufferGNN(nn.Module):
             actions = torch.gather(self.actions, 1, act_indices).reshape(
                 self.n_env * batch_size, self.n_act
             )
-            env_ids = torch.arange(self.n_env, device=self.device).unsqueeze(1).expand(-1, batch_size)
-            xanchors = self.xanchors[env_ids, indices].reshape(self.n_env * batch_size, self.n_xanchor, 3)
-            next_xanchors = self.next_xanchors[env_ids, indices].reshape(self.n_env * batch_size, self.n_xanchor, 3)
+            env_ids = (
+                torch.arange(self.n_env, device=self.device)
+                .unsqueeze(1)
+                .expand(-1, batch_size)
+            )
+            xanchors = self.xanchors[env_ids, indices].reshape(
+                self.n_env * batch_size, self.n_xanchor, 3
+            )
+            next_xanchors = self.next_xanchors[env_ids, indices].reshape(
+                self.n_env * batch_size, self.n_xanchor, 3
+            )
             rewards = torch.gather(self.rewards, 1, indices).reshape(
                 self.n_env * batch_size
             )
@@ -784,9 +793,15 @@ class SimpleReplayBufferGNN(nn.Module):
             observations = torch.gather(self.observations, 1, obs_indices).reshape(
                 self.n_env * batch_size, self.n_obs
             )
-            env_ids = torch.arange(self.n_env, device=self.device).unsqueeze(1).expand(-1, batch_size)
-            xanchors = self.xanchors[env_ids, indices].reshape(self.n_env * batch_size, self.n_xanchor, 3)
-            
+            env_ids = (
+                torch.arange(self.n_env, device=self.device)
+                .unsqueeze(1)
+                .expand(-1, batch_size)
+            )
+            xanchors = self.xanchors[env_ids, indices].reshape(
+                self.n_env * batch_size, self.n_xanchor, 3
+            )
+
             actions = torch.gather(self.actions, 1, act_indices).reshape(
                 self.n_env * batch_size, self.n_act
             )
@@ -937,7 +952,9 @@ class SimpleReplayBufferGNN(nn.Module):
             next_observations = final_next_observations.reshape(
                 self.n_env * batch_size, self.n_obs
             )
-            next_xanchors = self.next_xanchors[env_ids, final_next_obs_indices].reshape(self.n_env * batch_size, self.n_xanchor, 3)
+            next_xanchors = self.next_xanchors[env_ids, final_next_obs_indices].reshape(
+                self.n_env * batch_size, self.n_xanchor, 3
+            )
 
         out = TensorDict(
             {
@@ -958,4 +975,3 @@ class SimpleReplayBufferGNN(nn.Module):
             out["critic_observations"] = critic_observations
             out["next"]["critic_observations"] = next_critic_observations
         return out
-

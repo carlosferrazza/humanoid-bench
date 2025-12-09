@@ -29,9 +29,9 @@ from fast_td3.fast_td3_utils import (
     DictEmpiricalNormalization,
     EmpiricalNormalization,
     save_params,
-    unflatten_obs,
 )
 from fast_td3 import Critic
+from humanoid_bench.envs.dict_observation_tasks import unflatten_obs
 
 from fast_td3.train_utils import create_actor, collect_gradient_stats
 from fast_td3.hyperparams import HumanoidBenchArgs
@@ -208,10 +208,10 @@ def main():
     if args.obs_normalization:
         # Use DictEmpiricalNormalization for dict observations
         # This normalizes each feature type separately
+        # Hardcoded skip fields: joint_x, pelvis_quaternion, pelvis_position
         obs_normalizer = DictEmpiricalNormalization(
             obs_shapes=obs_shapes, 
-            device=device,
-            skip_keys=["joint_x"]  # Don't normalize joint_x
+            device=device
         )
         critic_obs_normalizer = EmpiricalNormalization(
             shape=n_critic_obs, device=device
@@ -229,15 +229,20 @@ def main():
             joint_x: Joint anchor coordinates
             
         Returns:
-            Normalized dict observation
+            Normalized dict observation with pelvis_position set to [0,0,0]
         """
         if isinstance(obs_normalizer, nn.Identity):
             # No normalization - just unflatten
-            return unflatten_obs(flat_obs, joint_x)
+            obs_dict = unflatten_obs(flat_obs, joint_x)
         else:
             # Unflatten then normalize
             obs_dict = unflatten_obs(flat_obs, joint_x)
-            return obs_normalizer(obs_dict)
+            obs_dict = obs_normalizer(obs_dict)
+        
+        # Set pelvis_position to [0, 0, 0] (origin-centered observations)
+        obs_dict["pelvis_position"] = torch.zeros_like(obs_dict["pelvis_position"])
+        
+        return obs_dict
     
     normalize_critic_obs = critic_obs_normalizer.forward
 

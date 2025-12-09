@@ -77,7 +77,7 @@ class HumanoidBenchDictEnv:
         "pelvis_angular_velocity",
         "joint_positions",
         "joint_velocities",
-        "xanchor",
+        "joint_x",
     ]
 
     def __init__(self, env_name, num_envs=1, render_mode=None, device=None):
@@ -124,8 +124,8 @@ class HumanoidBenchDictEnv:
             for key, space in self.observation_space.spaces.items():
                 size = np.prod(space.shape)
                 self.obs_sizes[key] = space.shape
-                if key != 'xanchor':  # Don't include xanchor in flat obs size
-                    total_size += size
+                # Include joint_x in flat obs size
+                total_size += size
             self.num_obs = total_size
         else:
             # Flat observation space (fallback)
@@ -239,12 +239,12 @@ class HumanoidBenchDictEnv:
             observations: Dict of observation tensors
             
         Returns:
-            Flat observation tensor (excluding joint_x)
+            Flat observation tensor (including joint_x)
         """
         if isinstance(observations, dict):
             flat_parts = []
             for key in self.OBS_KEYS:
-                if key != 'joint_x' and key in observations:
+                if key in observations:
                     obs = observations[key]
                     if len(obs.shape) > 2:
                         # Flatten multi-dimensional observations
@@ -252,9 +252,3 @@ class HumanoidBenchDictEnv:
                     flat_parts.append(obs)
             return torch.cat(flat_parts, dim=-1)
         return observations
-
-    def get_xanchor(self, observations):
-        """Extract xanchor from dict observations."""
-        if isinstance(observations, dict):
-            return observations.get('xanchor', None)
-        return None

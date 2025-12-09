@@ -1,10 +1,11 @@
 """
 Dict observation tasks for humanoid_bench.
 
-These tasks return observations as a dictionary instead of a flat vector,
-making it easier to use with different network architectures like EGNN.
+These tasks return observations as a flat vector (like the original tasks),
+but provide an unflatten_obs service to convert to dict format when needed
+for normalization and actor processing.
 
-The observation dict includes:
+The observation dict (when unflattened) includes:
 - pelvis_position: Root position (x, y, z)
 - pelvis_quaternion: Root quaternion (w, x, y, z)
 - pelvis_linear_velocity: Root linear velocity (vx, vy, vz)
@@ -19,55 +20,67 @@ from gymnasium.spaces import Box, Dict
 
 from humanoid_bench.envs.basic_locomotion_envs import Walk, Stand, Run
 
+try:
+    import torch
+except ImportError:
+    torch = None
+
+
+def unflatten_obs(flat_obs, joint_x):
+    """
+    Unflatten flat observation vector into a structured dict.
+    
+    This service converts flat observations (as returned by environment)
+    into a dict format needed by DictEmpiricalNormalization and ActorEGNNDict.
+    
+    Args:
+        flat_obs: Flat observation tensor or array (batch, 51) with format:
+            obs[:, 0:3] = pelvis_position
+            obs[:, 3:7] = pelvis_quaternion
+            obs[:, 7:26] = joint_positions (19 joints)
+            obs[:, 26:29] = pelvis_linear_velocity
+            obs[:, 29:32] = pelvis_angular_velocity
+            obs[:, 32:51] = joint_velocities (19 joints)
+        joint_x: Joint anchor coordinates tensor or array (batch, n_joints, 3)
+        
+    Returns:
+        Dict with keys: pelvis_position, pelvis_quaternion, pelvis_linear_velocity,
+        pelvis_angular_velocity, joint_positions, joint_velocities, joint_x
+    """
+    if torch is not None and isinstance(flat_obs, torch.Tensor):
+        return {
+            "pelvis_position": flat_obs[:, 0:3],
+            "pelvis_quaternion": flat_obs[:, 3:7],
+            "joint_positions": flat_obs[:, 7:26],
+            "pelvis_linear_velocity": flat_obs[:, 26:29],
+            "pelvis_angular_velocity": flat_obs[:, 29:32],
+            "joint_velocities": flat_obs[:, 32:51],
+            "joint_x": joint_x,
+        }
+    else:
+        # NumPy array
+        return {
+            "pelvis_position": flat_obs[:, 0:3],
+            "pelvis_quaternion": flat_obs[:, 3:7],
+            "joint_positions": flat_obs[:, 7:26],
+            "pelvis_linear_velocity": flat_obs[:, 26:29],
+            "pelvis_angular_velocity": flat_obs[:, 29:32],
+            "joint_velocities": flat_obs[:, 32:51],
+            "joint_x": joint_x,
+        }
+
 
 class DictObservationMixin:
-    """Mixin class that provides dict-based observations for locomotion tasks."""
+    """Mixin class that provides flat observations with unflatten service for locomotion tasks."""
 
     # Base task name for model_path construction (to be overridden)
     base_task_name = None
 
-    @property
-    def observation_space(self):
-        """Return a Dict observation space with separate feature types."""
-        # For H1 robot: dof=26
-        # qpos: 7 (free joint) + 19 (body joints) = 26
-        # qvel: 6 (free joint) + 19 (body joints) = 25
-        robot_dof = self.robot.dof
-        
-        # Joint positions (excluding free joint: 7 DoF)
-        n_joint = 19
-        
-        return Dict({
-            "pelvis_position": Box(
-                low=-np.inf, high=np.inf, shape=(3,), dtype=np.float64
-            ),
-            "pelvis_quaternion": Box(
-                low=-np.inf, high=np.inf, shape=(4,), dtype=np.float64
-            ),
-            "pelvis_linear_velocity": Box(
-                low=-np.inf, high=np.inf, shape=(3,), dtype=np.float64
-            ),
-            "pelvis_angular_velocity": Box(
-                low=-np.inf, high=np.inf, shape=(3,), dtype=np.float64
-            ),
-            "joint_positions": Box(
-                low=-np.inf, high=np.inf, shape=(n_joint,), dtype=np.float64
-            ),
-            "joint_velocities": Box(
-                low=-np.inf, high=np.inf, shape=(n_joint,), dtype=np.float64
-            ),
-            "joint_x": Box(
-                low=-np.inf, high=np.inf, shape=(n_joint, 3), dtype=np.float64
-            ),
-        })
-
-    def get_obs(self) -> dict:
-        """Return observations as a dictionary with separate feature types."""
+    def get_obs(self) -> np.ndarray:
+        """Return observations as a flat vector (matching original implementation)."""
         qpos = self._env.data.qpos.flat.copy()
         qvel = self._env.data.qvel.flat.copy()
-        joint_x = self._env.data.xanchor.copy()
-        joint_x = joint_x[1:, :] - joint_x[0, :]
-
+        
         # Extract pelvis state (free joint)
         pelvis_position = qpos[:3]  # x, y, z
         pelvis_quaternion = qpos[3:7]  # w, x, y, z
@@ -80,15 +93,15 @@ class DictObservationMixin:
         joint_positions = qpos[7:]
         joint_velocities = qvel[6:]
         
-        return {
-            "pelvis_position": pelvis_position,
-            "pelvis_quaternion": pelvis_quaternion,
-            "pelvis_linear_velocity": pelvis_linear_velocity,
-            "pelvis_angular_velocity": pelvis_angular_velocity,
-            "joint_positions": joint_positions,
-            "joint_velocities": joint_velocities,
-            "joint_x": joint_x,
-        }
+        # Concatenate into flat vector
+        return np.concatenate([
+            pelvis_position,
+            pelvis_quaternion,
+            joint_positions,
+            pelvis_linear_velocity,
+            pelvis_angular_velocity,
+            joint_velocities,
+        ])
 
 
 class StandDict(DictObservationMixin, Stand):

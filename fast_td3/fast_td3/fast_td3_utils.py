@@ -449,10 +449,16 @@ class DictEmpiricalNormalization(nn.Module):
     Normalize dict observations with separate normalizers for each feature type.
 
     This class applies EmpiricalNormalization to each feature type in the observation
-    dict, except for features specified in skip_keys (like xanchor).
+    dict, except for hardcoded features that should not be normalized:
+    - joint_x: Joint anchor coordinates (spatial coordinates)
+    - pelvis_quaternion: Already normalized quaternion representation
+    - pelvis_position: Will be set to [0,0,0] after normalization
     """
+    
+    # Hardcoded fields that should not be normalized
+    SKIP_KEYS = ["joint_x", "pelvis_quaternion", "pelvis_position"]
 
-    def __init__(self, obs_shapes: dict, device, eps=1e-2, until=None, skip_keys=None):
+    def __init__(self, obs_shapes: dict, device, eps=1e-2, until=None):
         """Initialize DictEmpiricalNormalization module.
 
         Args:
@@ -461,19 +467,17 @@ class DictEmpiricalNormalization(nn.Module):
             device: Device to place the normalizers on.
             eps (float): Small value for stability.
             until (int or None): If specified, stop learning after this many samples.
-            skip_keys (list or None): List of keys to skip normalization (e.g., ["xanchor"]).
         """
         super().__init__()
         self.obs_shapes = obs_shapes
         self.device = device
         self.eps = eps
         self.until = until
-        self.skip_keys = skip_keys or ["xanchor"]
 
-        # Create normalizers for each feature type
+        # Create normalizers for each feature type (except hardcoded skip keys)
         self.normalizers = nn.ModuleDict()
         for key, shape in obs_shapes.items():
-            if key not in self.skip_keys:
+            if key not in self.SKIP_KEYS:
                 self.normalizers[key] = EmpiricalNormalization(
                     shape=shape, device=device, eps=eps, until=until
                 )
@@ -491,7 +495,7 @@ class DictEmpiricalNormalization(nn.Module):
         """
         normalized = {}
         for key, value in x.items():
-            if key in self.skip_keys:
+            if key in self.SKIP_KEYS:
                 # Skip normalization for these keys
                 normalized[key] = value
             elif key in self.normalizers:
@@ -505,7 +509,7 @@ class DictEmpiricalNormalization(nn.Module):
         """Get the size of the flattened observation (excluding skipped keys)."""
         total = 0
         for key, shape in self.obs_shapes.items():
-            if key not in self.skip_keys:
+            if key not in self.SKIP_KEYS:
                 total += np.prod(shape)
         return total
 
@@ -527,7 +531,7 @@ class DictEmpiricalNormalization(nn.Module):
         """
         parts = []
         for key in sorted(self.obs_shapes.keys()):
-            if key not in self.skip_keys or include_skip_keys:
+            if key not in self.SKIP_KEYS or include_skip_keys:
                 if key in x:
                     value = x[key]
                     if len(value.shape) > 2:
@@ -951,35 +955,3 @@ class SimpleReplayBufferGNN(nn.Module):
             out["critic_observations"] = critic_observations
             out["next"]["critic_observations"] = next_critic_observations
         return out
-
-
-def unflatten_obs(flat_obs: torch.Tensor, joint_x: torch.Tensor) -> dict:
-    """
-    Unflatten flat observation vector into a structured dict.
-    
-    This service converts flat observations (as returned by environment)
-    into a dict format needed by DictEmpiricalNormalization and ActorEGNNDict.
-    
-    Args:
-        flat_obs: Flat observation tensor (batch, 51) with format:
-            obs[:, 0:3] = pelvis_position
-            obs[:, 3:7] = pelvis_quaternion
-            obs[:, 7:26] = joint_positions (19 joints)
-            obs[:, 26:29] = pelvis_linear_velocity
-            obs[:, 29:32] = pelvis_angular_velocity
-            obs[:, 32:51] = joint_velocities (19 joints)
-        joint_x: Joint anchor coordinates tensor (batch, n_joints, 3)
-        
-    Returns:
-        Dict with keys: pelvis_position, pelvis_quaternion, pelvis_linear_velocity,
-        pelvis_angular_velocity, joint_positions, joint_velocities, joint_x
-    """
-    return {
-        "pelvis_position": flat_obs[:, 0:3],
-        "pelvis_quaternion": flat_obs[:, 3:7],
-        "joint_positions": flat_obs[:, 7:26],
-        "pelvis_linear_velocity": flat_obs[:, 26:29],
-        "pelvis_angular_velocity": flat_obs[:, 29:32],
-        "joint_velocities": flat_obs[:, 32:51],
-        "joint_x": joint_x,
-    }

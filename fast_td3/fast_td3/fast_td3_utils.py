@@ -951,3 +951,35 @@ class SimpleReplayBufferGNN(nn.Module):
             out["critic_observations"] = critic_observations
             out["next"]["critic_observations"] = next_critic_observations
         return out
+
+
+def unflatten_obs(flat_obs: torch.Tensor, joint_x: torch.Tensor) -> dict:
+    """
+    Unflatten flat observation vector into a structured dict.
+    
+    This service converts flat observations (as returned by environment)
+    into a dict format needed by DictEmpiricalNormalization and ActorEGNNDict.
+    
+    Args:
+        flat_obs: Flat observation tensor (batch, 51) with format:
+            obs[:, 0:3] = pelvis_position
+            obs[:, 3:7] = pelvis_quaternion
+            obs[:, 7:26] = joint_positions (19 joints)
+            obs[:, 26:29] = pelvis_linear_velocity
+            obs[:, 29:32] = pelvis_angular_velocity
+            obs[:, 32:51] = joint_velocities (19 joints)
+        joint_x: Joint anchor coordinates tensor (batch, n_joints, 3)
+        
+    Returns:
+        Dict with keys: pelvis_position, pelvis_quaternion, pelvis_linear_velocity,
+        pelvis_angular_velocity, joint_positions, joint_velocities, joint_x
+    """
+    return {
+        "pelvis_position": flat_obs[:, 0:3],
+        "pelvis_quaternion": flat_obs[:, 3:7],
+        "joint_positions": flat_obs[:, 7:26],
+        "pelvis_linear_velocity": flat_obs[:, 26:29],
+        "pelvis_angular_velocity": flat_obs[:, 29:32],
+        "joint_velocities": flat_obs[:, 32:51],
+        "joint_x": joint_x,
+    }

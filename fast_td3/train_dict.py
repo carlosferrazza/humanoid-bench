@@ -447,8 +447,11 @@ def main():
                 -noise_clip, noise_clip
             )
 
+            # Convert flat next observations back to dict for actor forward pass
+            next_obs_dict = flat_to_obs(next_observations)
+            
             next_state_actions = (
-                actor(next_observations) + clipped_noise
+                actor(next_obs_dict) + clipped_noise
             ).clamp(action_low, action_high)
 
             # Compute target Q-values using target networks (no gradients)
@@ -541,10 +544,13 @@ def main():
                 else data["observations"]
             )
 
+            # Convert flat observations back to dict for actor forward pass
+            obs_dict = flat_to_obs(data["observations"])
+            
             # Compute Q-values for current states with actions from the main actor
             # Note: This uses the main 'actor' network, not 'actor_detach'
             qf1, qf2 = qnet(
-                critic_observations, actor(data["observations"])
+                critic_observations, actor(obs_dict)
             )
 
             # Convert distributional Q-values to scalar estimates
@@ -663,11 +669,9 @@ def main():
         if envs.asymmetric_obs:
             next_critic_obs = infos["observations"]["critic"]
 
-        # TRANSITION DATA PREPARATION
-        # Handle episode boundaries correctly - use 'raw' observations for terminal states
-        # This ensures we store the actual final state, not the auto-reset state
+        
         true_next_obs = torch.where(
-            dones[:, None] > 0, infos["observations"]["raw"]["obs"], next_obs
+            dones[:, None] > 0, infos["observations"]["raw"]["obs"], obs_to_flat(next_obs)
         )
         if envs.asymmetric_obs:
             true_next_critic_obs = torch.where(
@@ -679,7 +683,7 @@ def main():
         # Create transition tuple (s, a, r, s', done, truncated) for replay buffer
         transition = TensorDict(
             {
-                "observations": obs,
+                "observations": obs_to_flat(obs),
                 "actions": torch.as_tensor(actions, device=device, dtype=torch.float),
                 "next": {
                     "observations": true_next_obs,
@@ -716,11 +720,19 @@ def main():
                 # Sample a batch of transitions from replay buffer
                 data = rb.sample(batch_size)
 
-                # Normalize observations for stable training
-                data["observations"] = normalize_obs(data["observations"])
-                data["next"]["observations"] = normalize_obs(
-                    data["next"]["observations"]
-                )
+                # Convert flat observations back to dict format for normalization
+                # Replay buffer returns flat tensors, but normalize_obs expects dicts
+                obs_dict = flat_to_obs(data["observations"])
+                next_obs_dict = flat_to_obs(data["next"]["observations"])
+                
+                # Normalize observations for stable training (results stay as dicts)
+                normalized_obs_dict = normalize_obs(obs_dict)
+                normalized_next_obs_dict = normalize_obs(next_obs_dict)
+                
+                # Convert back to flat tensors to maintain CUDA graph compatibility
+                data["observations"] = obs_to_flat(normalized_obs_dict)
+                data["next"]["observations"] = obs_to_flat(normalized_next_obs_dict)
+                
                 if envs.asymmetric_obs:
                     data["critic_observations"] = normalize_critic_obs(
                         data["critic_observations"]
@@ -849,6 +861,72 @@ def main():
         args,
         f"models/{run_name}_final.pt",
     )
+
+
+def obs_to_flat(observations):
+    return torch.cat([
+        observations["pelvis_position"],          # (B, 3)
+        observations["pelvis_quaternion"],        # (B, 4)
+        observations["joint_positions"],          # (B, 19)
+        observations["pelvis_linear_velocity"],   # (B, 3)
+        observations["pelvis_angular_velocity"],  # (B, 3)
+        observations["joint_velocities"],         # (B, 19)
+        observations["joint_x"].reshape(observations["joint_x"].shape[0], -1),  # (B, 19*3)
+    ], dim=-1)
+
+
+def flat_to_obs(flat_obs):
+    """
+    Convert flattened observation tensor back to dict format.
+    
+    The flat observation is concatenated in this order:
+    - pelvis_position: 3
+    - pelvis_quaternion: 4
+    - joint_positions: 19
+    - pelvis_linear_velocity: 3
+    - pelvis_angular_velocity: 3
+    - joint_velocities: 19
+    - joint_x: 19*3 = 57
+    Total: 111
+    """
+    offset = 0
+    
+    pelvis_pos_size = 3
+    pelvis_position = flat_obs[:, offset:offset + pelvis_pos_size]
+    offset += pelvis_pos_size
+    
+    pelvis_quat_size = 4
+    pelvis_quaternion = flat_obs[:, offset:offset + pelvis_quat_size]
+    offset += pelvis_quat_size
+    
+    joint_pos_size = 19
+    joint_positions = flat_obs[:, offset:offset + joint_pos_size]
+    offset += joint_pos_size
+    
+    pelvis_lin_vel_size = 3
+    pelvis_linear_velocity = flat_obs[:, offset:offset + pelvis_lin_vel_size]
+    offset += pelvis_lin_vel_size
+    
+    pelvis_ang_vel_size = 3
+    pelvis_angular_velocity = flat_obs[:, offset:offset + pelvis_ang_vel_size]
+    offset += pelvis_ang_vel_size
+    
+    joint_vel_size = 19
+    joint_velocities = flat_obs[:, offset:offset + joint_vel_size]
+    offset += joint_vel_size
+    
+    joint_x_size = 19 * 3
+    joint_x = flat_obs[:, offset:offset + joint_x_size].reshape(flat_obs.shape[0], 19, 3)
+    
+    return {
+        "pelvis_position": pelvis_position,
+        "pelvis_quaternion": pelvis_quaternion,
+        "joint_positions": joint_positions,
+        "pelvis_linear_velocity": pelvis_linear_velocity,
+        "pelvis_angular_velocity": pelvis_angular_velocity,
+        "joint_velocities": joint_velocities,
+        "joint_x": joint_x,
+    }
 
 
 if __name__ == "__main__":

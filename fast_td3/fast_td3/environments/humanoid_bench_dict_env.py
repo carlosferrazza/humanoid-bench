@@ -94,6 +94,57 @@ class HumanoidBenchDictEnv:
         # Calculate flat observation size for compatibility
         self._calculate_obs_sizes()
 
+
+    def reset(self):
+        """Reset the environment and return dict observations as batched tensors."""
+        observations = self.envs.reset()
+        return self._merge_obs_array_to_dict(observations)
+
+    def render(self):
+        assert (
+            self.num_envs == 1
+        ), "Currently only supports single environment rendering"
+        return self.envs.render()
+
+    def step(self, actions):
+        assert isinstance(actions, torch.Tensor)
+        actions = actions.cpu().numpy()
+
+        observations, rewards, dones, raw_infos = self.envs.step(actions)
+        observations = self._merge_obs_array_to_dict(observations)
+
+        # This will be used for getting 'true' next observations
+        infos = dict()
+        infos["observations"] = {"raw": {"obs": self._obs_to_flat(observations)}}
+        truncateds = np.zeros_like(dones)
+        for i in range(self.num_envs):
+            if raw_infos[i].get("TimeLimit.truncated", False):
+                truncateds[i] = True
+                infos["observations"]["raw"]["obs"][i] = raw_infos[i][
+                    "terminal_observation"
+                ]
+
+        rewards = torch.from_numpy(rewards).to(
+            device=self.sim_device, dtype=torch.float
+        )
+        dones = torch.from_numpy(dones).to(device=self.sim_device)
+        truncateds = torch.from_numpy(truncateds).to(device=self.sim_device)
+
+        infos["time_outs"] = truncateds
+
+        return observations, rewards, dones, infos
+
+    def _obs_to_flat(self, observations):
+        return torch.cat([
+            observations["pelvis_position"],          # (B, 3)
+            observations["pelvis_quaternion"],        # (B, 4)
+            observations["joint_positions"],          # (B, 19)
+            observations["pelvis_linear_velocity"],   # (B, 3)
+            observations["pelvis_angular_velocity"],  # (B, 3)
+            observations["joint_velocities"],         # (B, 19)
+            observations["joint_x"].reshape(observations["joint_x"].shape[0], -1),  # (B, 19*3)
+        ], dim=-1)
+    
     def _calculate_obs_sizes(self):
         """Calculate observation sizes from the dict observation space."""
         if hasattr(self.observation_space, 'spaces'):
@@ -110,96 +161,45 @@ class HumanoidBenchDictEnv:
             self.num_obs = self.observation_space.shape[-1]
             self.obs_sizes = None
 
-    def _convert_obs_to_tensor(self, observations):
-        """Convert dict observations from numpy to torch tensors."""
-        if isinstance(observations, dict):
-            tensor_obs = {}
-            for key in observations:
-                tensor_obs[key] = torch.from_numpy(observations[key]).to(
-                    device=self.sim_device, dtype=torch.float
-                )
-            return tensor_obs
-        else:
-            return torch.from_numpy(observations).to(
-                device=self.sim_device, dtype=torch.float
-            )
-
-    def _stack_dict_obs(self, obs_list):
-        """Stack a list of dict observations into a single dict with batched tensors."""
-        if isinstance(obs_list[0], dict):
-            stacked = {}
-            for key in obs_list[0]:
-                stacked[key] = np.stack([obs[key] for obs in obs_list])
-            return stacked
-        return np.stack(obs_list)
-
-    def reset(self):
-        """Reset the environment and return dict observations."""
-        observations = self.envs.reset()
-        observations = torch.from_numpy(observations).to(
-            device=self.sim_device, dtype=torch.float
-        )
-        
-        return observations
-
-    def render(self):
-        assert (
-            self.num_envs == 1
-        ), "Currently only supports single environment rendering"
-        return self.envs.render()
-
-    def step(self, actions):
-        assert isinstance(actions, torch.Tensor)
-        actions = actions.cpu().numpy()
-
-        observations, rewards, dones, raw_infos = self.envs.step(actions)
-        observations = self.obs_to_flat(observations)
-
-        # This will be used for getting 'true' next observations
-        infos = dict()
-        infos["observations"] = {"raw": {"obs": observations.copy()}}
-        truncateds = np.zeros_like(dones)
-        for i in range(self.num_envs):
-            if raw_infos[i].get("TimeLimit.truncated", False):
-                truncateds[i] = True
-                infos["observations"]["raw"]["obs"][i] = raw_infos[i][
-                    "terminal_observation"
-                ]
-
-        observations = torch.from_numpy(observations).to(
-            device=self.sim_device, dtype=torch.float
-        )
-        rewards = torch.from_numpy(rewards).to(
-            device=self.sim_device, dtype=torch.float
-        )
-        dones = torch.from_numpy(dones).to(device=self.sim_device)
-        truncateds = torch.from_numpy(truncateds).to(device=self.sim_device)
-        infos["observations"]["raw"]["obs"] = torch.from_numpy(
-            infos["observations"]["raw"]["obs"]
-        ).to(device=self.sim_device, dtype=torch.float)
-        infos["time_outs"] = truncateds
-
-        return observations, rewards, dones, infos
-
-    def obs_to_flat(self, observations):
+    def _merge_obs_array_to_dict(self, obs_array):
         """
-        Convert dict observations to a flat vector.
-        Useful for MLP-based policies.
+        Merge an array of dict observations into a single dict with batched tensors.
+        
+        This helper method:
+        1. Takes an array/list of dict observations (one per environment)
+        2. Stacks them into a single dict with batched numpy arrays
+        3. Converts all values to torch tensors on the specified device
         
         Args:
-            observations: Dict of observation tensors
-            
+            obs_array: Array or list of dict observations, where each dict contains
+                      numpy arrays with observation components (e.g., pelvis_position,
+                      joint_positions, etc.)
+        
         Returns:
-            Flat observation tensor (excluding joint_x)
+            Dict with same keys as input dicts, but values are torch tensors
+            stacked along batch dimension (batch_size, *feature_dims)
+        
+        Example:
+            obs_array = [
+                {"pelvis_position": array([...]), "joint_positions": array([...])},
+                {"pelvis_position": array([...]), "joint_positions": array([...])},
+            ]
+            result = self._merge_obs_array_to_dict(obs_array)
+            # result = {
+            #     "pelvis_position": tensor([[...], [...]], device=self.sim_device),
+            #     "joint_positions": tensor([[...], [...]], device=self.sim_device),
+            # }
         """
-        if isinstance(observations, dict):
-            flat_parts = []
-            for key in self.OBS_KEYS:
-                if key != 'joint_x' and key in observations:
-                    obs = observations[key]
-                    if len(obs.shape) > 2:
-                        # Flatten multi-dimensional observations
-                        obs = obs.reshape(obs.shape[0], -1)
-                    flat_parts.append(obs)
-            return torch.cat(flat_parts, dim=-1)
-        return observations
+        # Stack all dicts into a single dict with batched numpy arrays
+        batched_dict = {}
+        for key in obs_array[0].keys():
+            batched_dict[key] = np.stack([obs[key] for obs in obs_array])
+        
+        # Convert all numpy arrays to torch tensors
+        tensor_dict = {}
+        for key, value in batched_dict.items():
+            tensor_dict[key] = torch.from_numpy(value).to(
+                device=self.sim_device, dtype=torch.float
+            )
+        
+        return tensor_dict

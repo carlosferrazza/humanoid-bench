@@ -483,7 +483,7 @@ class DictEmpiricalNormalization(nn.Module):
                     shape=shape, device=device, eps=eps, until=until
                 )
 
-    def forward(self, x: torch.tensor, center: bool = True) -> dict:
+    def forward(self, x: dict, center: bool = True) -> dict:
         """
         Normalize dict observations.
 
@@ -495,29 +495,16 @@ class DictEmpiricalNormalization(nn.Module):
             dict: Normalized observations.
         """
         
-        x = unflatten_obs(x)
-        
-        normalized = {}
         for key, value in x.items():
             if key in self.SKIP_KEYS:
-                normalized[key] = value
+                continue
             elif key in self.normalizers:
-                normalized[key] = self.normalizers[key](value, center=center)
+                x[key] = self.normalizers[key](value, center=center)
             else:
                 raise KeyError(f"No normalizer found for key '{key}'")
 
-        return torch.cat([
-                    normalized["pelvis_position"],          # (B, 3)
-                    normalized["pelvis_quaternion"],        # (B, 4)
-                    normalized["joint_positions"],          # (B, 19)
-                    normalized["pelvis_linear_velocity"],   # (B, 3)
-                    normalized["pelvis_angular_velocity"],  # (B, 3)
-                    normalized["joint_velocities"],         # (B, 19)
-                    normalized["joint_x"].reshape(x["joint_x"].shape[0], -1),  # (B, 19*3)
-                ], dim=-1)
-
-            
-
+        return x
+    
     def get_flat_obs_size(self):
         total = 0
         for _, shape in self.obs_shapes.items():

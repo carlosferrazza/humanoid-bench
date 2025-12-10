@@ -90,8 +90,6 @@ class ActorEGNNDict(nn.Module):
         self.register_buffer("std_max", torch.as_tensor(std_max, device=device))
 
     def forward(self, obs: torch.Tensor) -> torch.Tensor:
-        obs = unflatten_obs(obs)
-        
         return self.egnn(obs)
 
     def explore(

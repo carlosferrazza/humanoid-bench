@@ -95,7 +95,7 @@ class DictObservationMixin:
             dtype=np.float64,
         )
 
-    def get_obs(self) -> np.ndarray:
+    def get_obs(self) -> dict:
         """Return observations as a flat vector (matching original implementation)."""
         qpos = self._env.data.qpos.flat.copy()
         qvel = self._env.data.qvel.flat.copy()
@@ -115,15 +115,15 @@ class DictObservationMixin:
         joint_x = xanchor[1:, :] - xanchor[0, :]  # relative to pelvis
 
         # Concatenate into flat vector
-        return np.concatenate([
-            pelvis_position,
-            pelvis_quaternion,
-            joint_positions,
-            pelvis_linear_velocity,
-            pelvis_angular_velocity,
-            joint_velocities,
-            joint_x.reshape(-1),
-        ])
+        return {
+            "pelvis_position": pelvis_position,
+            "pelvis_quaternion": pelvis_quaternion,
+            "joint_positions": joint_positions,
+            "pelvis_linear_velocity": pelvis_linear_velocity,
+            "pelvis_angular_velocity": pelvis_angular_velocity,
+            "joint_velocities": joint_velocities,
+            "joint_x": joint_x,
+        }
 
 
 class StandDict(DictObservationMixin, Stand):

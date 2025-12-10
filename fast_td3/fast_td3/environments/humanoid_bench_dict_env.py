@@ -120,9 +120,17 @@ class HumanoidBenchDictEnv:
         for i in range(self.num_envs):
             if raw_infos[i].get("TimeLimit.truncated", False):
                 truncateds[i] = True
-                infos["observations"]["raw"]["obs"][i] = raw_infos[i][
-                    "terminal_observation"
-                ]
+                # Convert terminal_observation dict to flat tensor
+                terminal_obs_dict = raw_infos[i]["terminal_observation"]
+                # Convert numpy arrays to torch tensors
+                terminal_obs_tensor_dict = {}
+                for key, value in terminal_obs_dict.items():
+                    terminal_obs_tensor_dict[key] = torch.from_numpy(value).to(
+                        device=self.sim_device, dtype=torch.float
+                    )
+                # Now flatten this single observation using _obs_to_flat_single
+                terminal_obs_flat = self._obs_to_flat_single(terminal_obs_tensor_dict)
+                infos["observations"]["raw"]["obs"][i] = terminal_obs_flat
 
         rewards = torch.from_numpy(rewards).to(
             device=self.sim_device, dtype=torch.float
@@ -144,6 +152,19 @@ class HumanoidBenchDictEnv:
             observations["joint_velocities"],         # (B, 19)
             observations["joint_x"].reshape(observations["joint_x"].shape[0], -1),  # (B, 19*3)
         ], dim=-1)
+    
+    def _obs_to_flat_single(self, observation):
+        """Flatten a single observation dict (no batch dimension)."""
+        return torch.cat([
+            observation["pelvis_position"],          # (3,)
+            observation["pelvis_quaternion"],        # (4,)
+            observation["joint_positions"],          # (19,)
+            observation["pelvis_linear_velocity"],   # (3,)
+            observation["pelvis_angular_velocity"],  # (3,)
+            observation["joint_velocities"],         # (19,)
+            observation["joint_x"].reshape(-1),      # (19*3,)
+        ], dim=-1)  # (flat_size,)
+
     
     def _calculate_obs_sizes(self):
         """Calculate observation sizes from the dict observation space."""
@@ -191,13 +212,13 @@ class HumanoidBenchDictEnv:
             # }
         """
         # Stack all dicts into a single dict with batched numpy arrays
-        batched_dict = {}
-        for key in obs_array[0].keys():
-            batched_dict[key] = np.stack([obs[key] for obs in obs_array])
+        # batched_dict = {}
+        # for key in obs_array[0].keys():
+        #     batched_dict[key] = np.stack([obs[key] for obs in obs_array])
         
         # Convert all numpy arrays to torch tensors
         tensor_dict = {}
-        for key, value in batched_dict.items():
+        for key, value in obs_array.items():
             tensor_dict[key] = torch.from_numpy(value).to(
                 device=self.sim_device, dtype=torch.float
             )

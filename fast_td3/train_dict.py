@@ -179,7 +179,9 @@ def main():
     )
 
     n_act = envs.num_actions
-    n_obs = envs.num_obs if type(envs.num_obs) == int else envs.num_obs[0]
+    n_obs = sum(
+        int(np.prod(shape)) for shape in obs_shapes.values()
+    )
     if envs.asymmetric_obs:
         n_critic_obs = (
             envs.num_privileged_obs
@@ -362,14 +364,14 @@ def main():
 
         # Quick rollout for rendering
         if env_type == "humanoid_bench":
-            obs, joint_x = render_env.reset()
+            obs = render_env.reset()
             renders = [render_env.render()]
         elif env_type == "isaaclab":
             raise NotImplementedError(
                 "We don't support rendering for IsaacLab environments"
             )
         else:
-            obs, joint_x = render_env.reset()
+            obs = render_env.reset()
             if hasattr(render_env, 'state'):
                 render_env.state.info["command"] = jnp.array([[1.0, 0.0, 0.0]])
                 renders = [render_env.state]

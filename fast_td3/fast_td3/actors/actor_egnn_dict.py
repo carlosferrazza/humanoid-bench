@@ -100,8 +100,6 @@ class ActorEGNNDict(nn.Module):
         dones: torch.Tensor = None, 
         deterministic: bool = False
     ) -> torch.Tensor:
-        obs = unflatten_obs(obs)
-        
         # If dones is provided, resample noise for environments that are done
         if dones is not None and dones.sum() > 0:
             # Generate new noise scales for done environments

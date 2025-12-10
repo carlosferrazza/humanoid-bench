@@ -4,7 +4,7 @@ import gymnasium as gym
 
 import humanoid_bench
 from gymnasium.wrappers import TimeLimit
-from fast_td3.environments.subproc_vec_env import SubprocVecEnv
+from stable_baselines3.common.vec_env import SubprocVecEnv
 import numpy as np
 import torch
 from loguru import logger as log
@@ -56,7 +56,7 @@ class HumanoidBenchDictEnv:
         "pelvis_angular_velocity",
         "joint_positions",
         "joint_velocities",
-        "xanchor",
+        "joint_x",
     ]
 
     def __init__(self, env_name, num_envs=1, render_mode=None, device=None):
@@ -135,7 +135,10 @@ class HumanoidBenchDictEnv:
 
     def reset(self):
         """Reset the environment and return dict observations."""
-        observations = self.obs_to_flat(self.envs.reset())
+        observations = self.envs.reset()
+        observations = torch.from_numpy(observations).to(
+            device=self.sim_device, dtype=torch.float
+        )
         
         return observations
 
@@ -149,7 +152,7 @@ class HumanoidBenchDictEnv:
         assert isinstance(actions, torch.Tensor)
         actions = actions.cpu().numpy()
 
-        observations, rewards, dones, raw_infos, xanchor = self.envs.step(actions)
+        observations, rewards, dones, raw_infos = self.envs.step(actions)
         observations = self.obs_to_flat(observations)
 
         # This will be used for getting 'true' next observations
@@ -166,7 +169,6 @@ class HumanoidBenchDictEnv:
         observations = torch.from_numpy(observations).to(
             device=self.sim_device, dtype=torch.float
         )
-        xanchor = torch.from_numpy(xanchor).to(device=self.sim_device, dtype=torch.float)
         rewards = torch.from_numpy(rewards).to(
             device=self.sim_device, dtype=torch.float
         )

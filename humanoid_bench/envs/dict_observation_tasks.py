@@ -54,6 +54,31 @@ def unflatten_obs(flat_obs):
         "joint_x": flat_obs[:, 51:].reshape(flat_obs.shape[0], -1, 3),
     }
 
+def flatten_obs(obs_dict):
+    """
+    Flatten dict observation into a flat vector.
+    
+    This utility converts dict observations into flat format
+    as returned by the environment.
+    
+    Args:
+        obs_dict: Dict with keys: pelvis_position, pelvis_quaternion,
+            pelvis_linear_velocity, pelvis_angular_velocity,
+            joint_positions, joint_velocities, joint_x.
+        
+    Returns:
+        Flat observation tensor or array (batch, 51 + 19*3).
+    """
+    return torch.cat([
+        obs_dict["pelvis_position"],
+        obs_dict["pelvis_quaternion"],
+        obs_dict["joint_positions"],
+        obs_dict["pelvis_linear_velocity"],
+        obs_dict["pelvis_angular_velocity"],
+        obs_dict["joint_velocities"],
+        obs_dict["joint_x"].reshape(obs_dict["joint_x"].shape[0], -1),
+    ], axis=-1)
+
 
 class DictObservationMixin:
     """Mixin class that provides flat observations with unflatten service for locomotion tasks."""
@@ -61,13 +86,23 @@ class DictObservationMixin:
     # Base task name for model_path construction (to be overridden)
     base_task_name = None
 
+    @property
+    def observation_space(self):
+        return Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=(51 + 19 * 3,),
+            dtype=np.float64,
+        )
+
     def get_obs(self) -> np.ndarray:
         """Return observations as a flat vector (matching original implementation)."""
         qpos = self._env.data.qpos.flat.copy()
         qvel = self._env.data.qvel.flat.copy()
+        xanchor = self._env.data.xanchor.copy()
         
         # Extract pelvis state (free joint)
-        pelvis_position = qpos[:3]  # x, y, z
+        pelvis_position = np.array([0,0,0])  # x, y, z
         pelvis_quaternion = qpos[3:7]  # w, x, y, z
         
         # Extract pelvis velocity
@@ -77,7 +112,8 @@ class DictObservationMixin:
         # Extract joint state (excluding free joint)
         joint_positions = qpos[7:]
         joint_velocities = qvel[6:]
-        
+        joint_x = xanchor[1:, :] - xanchor[0, :]  # relative to pelvis
+
         # Concatenate into flat vector
         return np.concatenate([
             pelvis_position,
@@ -86,6 +122,7 @@ class DictObservationMixin:
             pelvis_linear_velocity,
             pelvis_angular_velocity,
             joint_velocities,
+            joint_x.reshape(-1),
         ])
 
 

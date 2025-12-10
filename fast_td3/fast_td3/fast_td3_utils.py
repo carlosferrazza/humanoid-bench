@@ -6,7 +6,7 @@ import torch.nn as nn
 
 from tensordict import TensorDict
 
-from humanoid_bench.envs.dict_observation_tasks import unflatten_obs
+from humanoid_bench.envs.dict_observation_tasks import unflatten_obs, flatten_obs
 
 class SimpleReplayBuffer(nn.Module):
     def __init__(
@@ -500,48 +500,29 @@ class DictEmpiricalNormalization(nn.Module):
         normalized = {}
         for key, value in x.items():
             if key in self.SKIP_KEYS:
-                # Skip normalization for these keys
                 normalized[key] = value
             elif key in self.normalizers:
                 normalized[key] = self.normalizers[key](value, center=center)
             else:
-                # Pass through unknown keys
-                normalized[key] = value
-        return normalized
+                raise KeyError(f"No normalizer found for key '{key}'")
+
+        return torch.cat([
+                    normalized["pelvis_position"],          # (B, 3)
+                    normalized["pelvis_quaternion"],        # (B, 4)
+                    normalized["joint_positions"],          # (B, 19)
+                    normalized["pelvis_linear_velocity"],   # (B, 3)
+                    normalized["pelvis_angular_velocity"],  # (B, 3)
+                    normalized["joint_velocities"],         # (B, 19)
+                    normalized["joint_x"].reshape(x["joint_x"].shape[0], -1),  # (B, 19*3)
+                ], dim=-1)
+
+            
 
     def get_flat_obs_size(self):
-        """Get the size of the flattened observation (excluding skipped keys)."""
         total = 0
-        for key, shape in self.obs_shapes.items():
-            if key not in self.SKIP_KEYS:
-                total += np.prod(shape)
+        for _, shape in self.obs_shapes.items():
+            total += np.prod(shape)
         return total
-
-    def to_flat(self, x: dict, include_skip_keys: bool = False) -> torch.Tensor:
-        """
-        Convert dict observations to a flat tensor.
-
-        Args:
-            x (dict): Dictionary of observation tensors.
-            include_skip_keys (bool): If True, include skipped keys in the flat output.
-
-        Returns:
-            torch.Tensor: Flat observation tensor.
-
-        Note:
-            Keys are sorted alphabetically to ensure consistent ordering.
-            The resulting flat tensor structure will be:
-            [key1_values, key2_values, ...] where keys are in sorted order.
-        """
-        parts = []
-        for key in sorted(self.obs_shapes.keys()):
-            if key not in self.SKIP_KEYS or include_skip_keys:
-                if key in x:
-                    value = x[key]
-                    if len(value.shape) > 2:
-                        value = value.reshape(value.shape[0], -1)
-                    parts.append(value)
-        return torch.cat(parts, dim=-1)
 
 
 def cpu_state(sd):

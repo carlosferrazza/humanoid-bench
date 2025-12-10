@@ -421,8 +421,6 @@ def main():
             # Extract transition data from replay buffer
             observations = data["observations"]
             next_observations = data["next"]["observations"]
-            xanchor = data["xanchors"]
-            next_xanchor = data["next"]["xanchors"]
 
             if envs.asymmetric_obs:
                 critic_observations = data["critic_observations"]
@@ -639,7 +637,7 @@ def main():
         obs, critic_obs = envs.reset_with_critic_obs()
         critic_obs = torch.as_tensor(critic_obs, device=device, dtype=torch.float)
     else:
-        obs = envs.reset()  # obs is flat, joint_x is separate
+        obs = envs.reset()
     pbar = tqdm.tqdm(total=args.total_timesteps, initial=global_step)
     dones = None
 

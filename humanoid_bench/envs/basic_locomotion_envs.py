@@ -390,32 +390,3 @@ class SitHard(Sit):
         position[3:7] = self.euler_to_quat(np.array([0, 0, rotation_angle]))
         self._env.set_state(position, velocity)
         return super().reset_model()
-
-
-class RunV2(Walk):
-    _move_speed = 5
-
-    def get_terminated(self):
-        return self._env.data.qpos[2] < 0.4, {}
-
-    def get_obs(self) -> dict:
-        position = self._env.data.qpos.flat.copy()
-        velocity = self._env.data.qvel.flat.copy()
-        coordinates = self._env.data.xanchor.copy()
-
-        joint_positions = position[7:]
-        joint_velocities = velocity[6:]
-        joint_coordinates = coordinates - coordinates[0]
-
-        assert len(joint_positions) == len(joint_velocities) == len(joint_coordinates) - 1
-        pelvis_orientation = position[:3]
-        pelvis_velocity = velocity[3:7]
-
-
-        return {
-            "pelvis_orientation": pelvis_orientation,
-            "pelvis_velocites": pelvis_velocity,
-            "joint_positions": joint_positions,
-            "joint_velocities": joint_velocities,
-            "joint_coordinates": joint_coordinates,
-        }

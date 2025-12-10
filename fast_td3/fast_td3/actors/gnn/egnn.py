@@ -2,6 +2,7 @@ from torch import nn
 import torch
 
 from fast_td3.robots.graph_builder import GraphBuilder
+from humanoid_bench.envs.custom_env import unflatten_obs
 
 # Environment classification for object inclusion
 env_with_object = [
@@ -248,11 +249,15 @@ class EGNN(nn.Module):
         )
         
         self.to(self.device)
-
-    def forward(self, obs: torch.Tensor, xanchor: torch.Tensor) -> torch.Tensor:
-        current_batch_size = obs.shape[0]
+    
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
+        obs = unflatten_obs(obs)    
+        
+        current_batch_size = obs["joint_velocities"].shape[0]
         edges = self.get_cached_edges(current_batch_size)
-        h_joints, x_joint, _, _ = self.graph_builder.generate_input(obs, xanchor)
+        
+        h_joints = torch.stack([obs["joint_velocities"].reshape(-1), obs["joint_positions"].reshape(-1)], dim=1)
+        x_joint = obs["joint_x"].reshape(-1, 3)
 
         h_joints = self.joint_embedding_in(h_joints)
         for layer in self.layers:

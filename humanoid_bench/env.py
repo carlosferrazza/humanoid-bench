@@ -40,12 +40,11 @@ from .envs.basic_locomotion_envs import (
     SitHard,
     Stair,
     Slide,
-    RunV2
 )
-from .envs.dict_observation_tasks import (
-    StandDict,
-    WalkDict,
-    RunDict,
+from .envs.custom_env import (
+    Stand as StandV2,
+    Walk as WalkV2,
+    Run as RunV2
 )
 from .envs.reach import Reach
 from .envs.pole import Pole
@@ -70,7 +69,9 @@ DEFAULT_CAMERA_CONFIG = {
 DEFAULT_RANDOMNESS = 0.01
 
 ROBOTS = {"h1": H1, "h1hand": H1Hand, "h1simplehand": H1SimpleHand, "h1strong": H1Strong, "h1touch": H1Touch, "g1": G1}
-TASKS = {
+
+# Original tasks
+_TASKS_ORIGINAL = {
     "stand": Stand,
     "walk": Walk,
     "run": Run,
@@ -103,12 +104,17 @@ TASKS = {
     "insert_normal": Insert,
     "insert_small": Insert,  # This is not an error
     "powerlift": Powerlift,
-    "runv2": RunV2,
-    # Dict observation tasks
-    "stand_dict": StandDict,
-    "walk_dict": WalkDict,
-    "run_dict": RunDict,
 }
+
+# Custom tasks with better naming convention
+TASKS_CUSTOM = {
+    "stand-v1": StandV2,
+    "walk-v1": WalkV2,
+    "run-v1": RunV2,
+}
+
+# Merged tasks dictionary (used by HumanoidEnv)
+TASKS = {**_TASKS_ORIGINAL, **TASKS_CUSTOM}
 
 
 class HumanoidEnv(MujocoEnv, gym.utils.EzPickle):

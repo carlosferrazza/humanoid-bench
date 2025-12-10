@@ -27,6 +27,7 @@ torch.set_float32_matmul_precision("high")
 from fast_td3.fast_td3_utils import (
     EmpiricalNormalization,
     SimpleReplayBufferGNN,
+    StructuredEmpiricalNormalization,
     save_params,
 )
 from fast_td3 import Critic
@@ -192,19 +193,32 @@ def main():
     action_low, action_high = -1.0, 1.0
 
     if args.obs_normalization:
-        obs_normalizer = EmpiricalNormalization(shape=n_obs, device=device)
-        critic_obs_normalizer = EmpiricalNormalization(
-            shape=n_critic_obs, device=device
-        )
-        xanchor_normalizer = nn.Identity()
+        if "v1" in terminal_args["env_name"]:
+            print("Use structured normalization")
+            obs_shapes = {
+                "pelvis_position": (3,),
+                "pelvis_quaternion": (4,),
+                "pelvis_linear_velocity": (3,),
+                "pelvis_angular_velocity": (3,),
+                "joint_positions": (19,),
+                "joint_velocities": (19,),
+                "joint_x": (19, 3),
+            }
+            obs_normalizer = StructuredEmpiricalNormalization(obs_shapes=obs_shapes, device=device)
+            critic_obs_normalizer = StructuredEmpiricalNormalization(
+                obs_shapes=obs_shapes, device=device
+            )
+        else:
+            obs_normalizer = EmpiricalNormalization(shape=n_obs, device=device)
+            critic_obs_normalizer = EmpiricalNormalization(
+                shape=n_critic_obs, device=device
+            )
     else:
         obs_normalizer = nn.Identity()
         critic_obs_normalizer = nn.Identity()
-        xanchor_normalizer = nn.Identity()
 
     normalize_obs = obs_normalizer.forward
     normalize_critic_obs = critic_obs_normalizer.forward
-    normalize_xanchor = xanchor_normalizer.forward
 
     # Create the main actor and actor detach (twin actor)
     actor = create_actor(
@@ -294,7 +308,6 @@ def main():
 
         actor.load_state_dict(torch_checkpoint["actor_state_dict"])
         obs_normalizer.load_state_dict(torch_checkpoint["obs_normalizer_state"])
-        xanchor_normalizer.load_state_dict(torch_checkpoint["xanchor_normalizer_state"])
         critic_obs_normalizer.load_state_dict(
             torch_checkpoint["critic_obs_normalizer_state"]
         )
@@ -319,7 +332,6 @@ def main():
                 - average_episode_length: Mean number of steps across all evaluation episodes
         """
         obs_normalizer.eval()
-        xanchor_normalizer.eval()
         num_eval_envs = eval_envs.num_envs
         episode_returns = torch.zeros(num_eval_envs, device=device)
         episode_lengths = torch.zeros(num_eval_envs, device=device)
@@ -328,7 +340,7 @@ def main():
         if env_type == "isaaclab":
             obs = eval_envs.reset(random_start_init=False)
         else:
-            obs, xanchor = eval_envs.reset()
+            obs = eval_envs.reset()
 
         # Run for a fixed number of steps
         for _ in range(eval_envs.max_episode_steps):
@@ -336,10 +348,9 @@ def main():
                 device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled
             ):
                 obs = normalize_obs(obs)
-                xanchor = normalize_xanchor(xanchor)
-                actions = actor(obs, xanchor)
+                actions = actor(obs)
 
-            next_obs, rewards, dones, _, next_xanchor = eval_envs.step(actions.float())
+            next_obs, rewards, dones, _ = eval_envs.step(actions.float())
             episode_returns = torch.where(
                 ~done_masks, episode_returns + rewards, episode_returns
             )
@@ -350,26 +361,23 @@ def main():
             if done_masks.all():
                 break
             obs = next_obs
-            xanchor = next_xanchor
 
         obs_normalizer.train()
-        xanchor_normalizer.train()
         return episode_returns.mean().item(), episode_lengths.mean().item()
 
     def render_with_rollout():
         obs_normalizer.eval()
-        xanchor_normalizer.eval()
 
         # Quick rollout for rendering
         if env_type == "humanoid_bench":
-            obs, xanchor = render_env.reset()
+            obs = render_env.reset()
             renders = [render_env.render()]
         elif env_type == "isaaclab":
             raise NotImplementedError(
                 "We don't support rendering for IsaacLab environments"
             )
         else:
-            obs, xanchor = render_env.reset()
+            obs = render_env.reset()
             render_env.state.info["command"] = jnp.array([[1.0, 0.0, 0.0]])
             renders = [render_env.state]
 
@@ -378,9 +386,8 @@ def main():
                 device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled
             ):
                 obs = normalize_obs(obs)
-                xanchor = normalize_xanchor(xanchor)
-                actions = actor(obs, xanchor)
-            next_obs, _, done, _, next_xanchor = render_env.step(actions.float())
+                actions = actor(obs)
+            next_obs, _, done, _ = render_env.step(actions.float())
             if env_type == "mujoco_playground":
                 render_env.state.info["command"] = jnp.array([[1.0, 0.0, 0.0]])
             if i % 2 == 0:
@@ -391,13 +398,11 @@ def main():
             if done.any():
                 break
             obs = next_obs
-            xanchor = next_xanchor
 
         if env_type == "mujoco_playground":
             renders = render_env.render_trajectory(renders)
 
         obs_normalizer.train()
-        xanchor_normalizer.train()
         return renders
 
     policy_noise = args.policy_noise
@@ -420,8 +425,6 @@ def main():
             # Extract transition data from replay buffer
             observations = data["observations"]
             next_observations = data["next"]["observations"]
-            xanchor = data["xanchors"]
-            next_xanchor = data["next"]["xanchors"]
 
             if envs.asymmetric_obs:
                 critic_observations = data["critic_observations"]
@@ -449,7 +452,7 @@ def main():
             )
 
             next_state_actions = (
-                actor(next_observations, next_xanchor) + clipped_noise
+                actor(next_observations) + clipped_noise
             ).clamp(action_low, action_high)
 
             # Compute target Q-values using target networks (no gradients)
@@ -545,7 +548,7 @@ def main():
             # Compute Q-values for current states with actions from the main actor
             # Note: This uses the main 'actor' network, not 'actor_detach'
             qf1, qf2 = qnet(
-                critic_observations, actor(data["observations"], data["xanchors"])
+                critic_observations, actor(data["observations"])
             )
 
             # Convert distributional Q-values to scalar estimates
@@ -586,7 +589,6 @@ def main():
         policy = torch.compile(policy, mode=mode)
         normalize_obs = torch.compile(normalize_obs, mode=mode)
         normalize_critic_obs = torch.compile(normalize_critic_obs, mode=mode)
-        normalize_xanchor = torch.compile(normalize_xanchor, mode=mode)
 
     def frames_to_video_html(frames, fps=30):
         """
@@ -639,7 +641,7 @@ def main():
         obs, critic_obs = envs.reset_with_critic_obs()
         critic_obs = torch.as_tensor(critic_obs, device=device, dtype=torch.float)
     else:
-        obs, xanchor = envs.reset()
+        obs= envs.reset()
     pbar = tqdm.tqdm(total=args.total_timesteps, initial=global_step)
     dones = None
 
@@ -652,16 +654,12 @@ def main():
         with torch.no_grad(), autocast(
             device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled
         ):
-            if isinstance(obs, tuple):
-                obs, xanchor = obs
-
             norm_obs = normalize_obs(obs)
-            norm_xanchor = normalize_xanchor(xanchor)
-            actions = policy(obs=norm_obs, xanchor=norm_xanchor, dones=dones)
+            actions = policy(obs=norm_obs, dones=dones)
 
         # ENVIRONMENT INTERACTION PHASE
         # Take actions in the environment and collect transition data
-        next_obs, rewards, dones, infos, next_xanchor = envs.step(actions.float())
+        next_obs, rewards, dones, infos = envs.step(actions.float())
         truncations = infos["time_outs"]  # Episodes ended due to time limits
 
         # Extract privileged observations for critic if using asymmetric observations
@@ -685,11 +683,9 @@ def main():
         transition = TensorDict(
             {
                 "observations": obs,
-                "xanchors": xanchor,
                 "actions": torch.as_tensor(actions, device=device, dtype=torch.float),
                 "next": {
                     "observations": true_next_obs,
-                    "xanchors": next_xanchor,
                     "rewards": torch.as_tensor(
                         rewards, device=device, dtype=torch.float
                     ),
@@ -707,7 +703,6 @@ def main():
 
         # UPDATE OBSERVATIONS FOR NEXT ITERATION
         obs = next_obs
-        xanchor = next_xanchor
         if envs.asymmetric_obs:
             critic_obs = next_critic_obs
 
@@ -729,8 +724,6 @@ def main():
                 data["next"]["observations"] = normalize_obs(
                     data["next"]["observations"]
                 )
-                data["xanchors"] = normalize_xanchor(data["xanchors"])
-                data["next"]["xanchors"] = normalize_xanchor(data["next"]["xanchors"])
                 if envs.asymmetric_obs:
                     data["critic_observations"] = normalize_critic_obs(
                         data["critic_observations"]
@@ -790,7 +783,7 @@ def main():
                         eval_avg_return, eval_avg_length = evaluate()
                         # Reset training environments after evaluation (environment-specific hack)
                         if env_type in ["humanoid_bench", "isaaclab"]:
-                            obs, xanchor = envs.reset()
+                            obs = envs.reset()
                         logs["eval_avg_return"] = eval_avg_return
                         logs["eval_avg_length"] = eval_avg_length
 
@@ -841,7 +834,6 @@ def main():
                     qnet,
                     qnet_target,
                     obs_normalizer,
-                    xanchor_normalizer,
                     critic_obs_normalizer,
                     args,
                     f"models/{run_name}_{global_step}.pt",
@@ -856,7 +848,6 @@ def main():
         qnet,
         qnet_target,
         obs_normalizer,
-        xanchor_normalizer,
         critic_obs_normalizer,
         args,
         f"models/{run_name}_final.pt",

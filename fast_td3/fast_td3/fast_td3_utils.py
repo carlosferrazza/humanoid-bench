@@ -6,7 +6,7 @@ import torch.nn as nn
 
 from tensordict import TensorDict
 
-from humanoid_bench.envs.dict_observation_tasks import unflatten_obs, flatten_obs
+from humanoid_bench.envs.custom_env import unflatten_obs, flatten_obs
 
 class SimpleReplayBuffer(nn.Module):
     def __init__(
@@ -445,7 +445,7 @@ class EmpiricalNormalization(nn.Module):
         return y * (self._std + self.eps) + self._mean
 
 
-class DictEmpiricalNormalization(nn.Module):
+class StructuredEmpiricalNormalization(nn.Module):
     """
     Normalize dict observations with separate normalizers for each feature type.
 
@@ -460,7 +460,7 @@ class DictEmpiricalNormalization(nn.Module):
     SKIP_KEYS = ["joint_x", "pelvis_quaternion", "pelvis_position"]
 
     def __init__(self, obs_shapes: dict, device, eps=1e-2, until=None):
-        """Initialize DictEmpiricalNormalization module.
+        """Initialize StructuredEmpiricalNormalization module.
 
         Args:
             obs_shapes (dict): Dictionary mapping observation keys to their shapes.
@@ -483,7 +483,7 @@ class DictEmpiricalNormalization(nn.Module):
                     shape=shape, device=device, eps=eps, until=until
                 )
 
-    def forward(self, x: dict, center: bool = True) -> dict:
+    def forward(self, x: torch.Tensor, center: bool = True) -> torch.Tensor:
         """
         Normalize dict observations.
 
@@ -495,6 +495,8 @@ class DictEmpiricalNormalization(nn.Module):
             dict: Normalized observations.
         """
         
+        x = unflatten_obs(x)
+        
         for key, value in x.items():
             if key in self.SKIP_KEYS:
                 continue
@@ -503,7 +505,7 @@ class DictEmpiricalNormalization(nn.Module):
             else:
                 raise KeyError(f"No normalizer found for key '{key}'")
 
-        return x
+        return flatten_obs(x)
     
     def get_flat_obs_size(self):
         total = 0
@@ -575,22 +577,10 @@ class SimpleReplayBufferGNN(nn.Module):
         """
         super().__init__()
 
-        if env_name in [
-            "h1-push-v0",
-            "h1-basketball-v0",
-            "h1-package-v0",
-            "h1-sit_hard-v0",
-            "h1-balance_simple-v0",
-        ]:
-            n_xanchor = 21
-        else:
-            n_xanchor = 20
-
         self.n_env = n_env
         self.buffer_size = buffer_size
         self.n_obs = n_obs
         self.n_act = n_act
-        self.n_xanchor = n_xanchor
         self.n_critic_obs = n_critic_obs
         self.asymmetric_obs = asymmetric_obs
         self.playground_mode = playground_mode and asymmetric_obs

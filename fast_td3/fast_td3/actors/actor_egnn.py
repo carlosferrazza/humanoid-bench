@@ -24,6 +24,7 @@ class ActorEGNN(nn.Module):
     ):
         super().__init__()
         self.n_envs = num_envs
+        self.device = device
 
         match act_fn:
             case "leaky_relu":
@@ -61,19 +62,20 @@ class ActorEGNN(nn.Module):
         self.register_buffer("std_min", torch.as_tensor(std_min, device=device))
         self.register_buffer("std_max", torch.as_tensor(std_max, device=device))
 
-    def forward(self, obs, xanchor) -> torch.Tensor:
-        result = self.egnn(obs, xanchor)
-
-        return result
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
+        return self.egnn(obs)
 
     def explore(
-        self, obs: torch.Tensor, xanchor: torch.Tensor, dones: torch.Tensor = None, deterministic: bool = False
+        self, 
+        obs: torch.Tensor,
+        dones: torch.Tensor = None, 
+        deterministic: bool = False
     ) -> torch.Tensor:
         # If dones is provided, resample noise for environments that are done
         if dones is not None and dones.sum() > 0:
-            # Generate new noise scales for done environments (one per environment)
+            # Generate new noise scales for done environments
             new_scales = (
-                torch.rand(self.n_envs, 1, device=obs.device)
+                torch.rand(self.n_envs, 1, device=self.device)
                 * (self.std_max - self.std_min)
                 + self.std_min
             )
@@ -82,7 +84,8 @@ class ActorEGNN(nn.Module):
             dones_view = dones.view(-1, 1) > 0
             self.noise_scales = torch.where(dones_view, new_scales, self.noise_scales)
 
-        act = self(obs, xanchor)
+        act = self(obs)
+        
         if deterministic:
             return act
 

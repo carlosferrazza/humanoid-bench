@@ -12,6 +12,7 @@
     <worldbody>
         <body name="basketball_hoop" pos="6.0198 0 0">
             <body name="baskethoop" pos='-0.2 0 2.25'>
+                <site name="hoop_center" pos="-0.025 0 0" />
                 <geom type="mesh" mesh="baskethoop" material="baskethoop" pos="0.4 0 -2.25" xyaxes="0 -1 0 0 0 1" class="visual"/>
                 <geom type="box" pos="0.25 0 -0.2" size="0.01 0.2 0.2" class="visual" rgba="0 0 0 0"/>
                 <geom type="box" pos="0.2 0.2 -0.2" size="0.15 0.01 0.2" euler="0 0 -45" class="visual" rgba="0 0 0 0"/>
@@ -42,6 +43,5 @@
             <geom type="sphere" pos="0 0 0" size="0.1193" density="35" material="spherebody" class="visual"/>
             <geom name="basketball_collision" type="sphere" pos="0 0 0" size="0.1193" density="35" class="collision"/>
         </body>
-        <site name="hoop_center" pos="5.9 0 2.25" />
     </worldbody>
 </mujocoinclude>
